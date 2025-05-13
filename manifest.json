@@ -28,7 +28,11 @@
   "content_scripts": [
     {
       "matches": ["*://chatgpt.com/*"],
-      "js": ["content.js"]
+      "js": ["gpt-content.js"]
+    },
+    {
+      "matches": ["*://claude.ai/*"],
+      "js": ["claude-content.js"]
     }
   ]
 }
