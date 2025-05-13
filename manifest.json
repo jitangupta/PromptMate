@@ -23,12 +23,12 @@
     }
   },
   "background": {
-    "service_worker": "background.js"
+    "service_worker": "dist/background.bundle.js"
   },
   "content_scripts": [
     {
       "matches": ["*://chatgpt.com/*"],
-      "js": ["gpt-content.js"]
+      "js": ["dist/gpt-content.bundle.js"]
     },
     {
       "matches": ["*://claude.ai/*"],

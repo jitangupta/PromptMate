@@ -405,6 +405,11 @@ function createPromptItem(prompt) {
   const toneOption   = TONE_OPTIONS.find(o => o.option === toneOpt);
   const formatOption = FORMAT_OPTIONS.find(o => o.option === formatOpt);
 
+  document.getElementById('pm-title').value       = '';
+  document.getElementById('pm-prompt-body').value = '';
+  document.getElementById('pm-tone').value        = '';
+  document.getElementById('pm-format').value      = '';
+
   loadPrompts(list => {
     if (editId) {
       const idx = list.findIndex(p => p.id === editId);
@@ -425,6 +430,8 @@ function createPromptItem(prompt) {
     closePromptModal();
     renderPromptList();
   });
+
+ 
 }
 
   // Render list with Title & PromptBody; clicking injects full prompt (body + tone + format)
