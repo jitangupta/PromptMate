@@ -13,6 +13,7 @@ node_modules/
 .cache/
 dist/
 build/
+promptmate-dist/
 
 # Environment variables
 .env
