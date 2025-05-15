@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "PromptMate",
-  "version": "0.1",
+  "version": "0.3.0",
   "description": "Your prompts. One click away.",
   "permissions": [
     "storage",
