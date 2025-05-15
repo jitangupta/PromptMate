@@ -5,7 +5,6 @@
   "description": "Your prompts. One click away.",
   "permissions": [
     "storage",
-    "activeTab",
     "scripting",
     "tabs"
   ],

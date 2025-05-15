@@ -592,6 +592,7 @@
         const idx = list.findIndex(p => p.id === editId);
         list[idx] = { ...list[idx], title, promptBody: bodyText, tone: toneOption, format: formatOption };
         delete modal.dataset.editPromptId;
+        recordAnalytics('edited');
       } else {
         const newPrompt = {
           id: crypto.randomUUID(),
@@ -602,6 +603,7 @@
           format: formatOption
         };
         list.push(newPrompt);
+         recordAnalytics('created');
       }
       savePrompts(list);
       closePromptModal();
