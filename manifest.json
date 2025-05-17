@@ -31,7 +31,7 @@
     },
     {
       "matches": ["*://claude.ai/*"],
-      "js": ["claude-content.js"]
+      "js": ["dist/gpt-content.bundle.js"]
     }
   ]
 }

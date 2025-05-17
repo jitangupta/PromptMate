@@ -23,6 +23,24 @@ export default [
     ]
   },
   {
+    input: 'scripts/claude-content.js',
+    output: {
+      file: 'dist/claude-content.bundle.js',
+      format: 'iife',
+      sourcemap: true
+    },
+    plugins: [
+      resolve(),
+      commonjs(),
+      postcss({
+        inject: true,
+        minimize: true,
+        extensions: ['.css']
+      }),
+      terser()
+    ]
+  },
+  {
     input: 'background.js',
     output: {
       file: 'dist/background.bundle.js',
