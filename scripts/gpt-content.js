@@ -1,186 +1,20 @@
+import {
+  TONE_OPTIONS,
+  FORMAT_OPTIONS,
+  loadPrompts,
+  savePrompts,
+  recordAnalytics,
+  shareAnalytics
+} from './business.js';
+
+import { makeInputField, makeSelectField } from './utility.js';
+
 (function initPromptMateIntegration() {
-  const STORAGE_KEY = "promptmate_prompts";
   const BUTTON_ID = "promptmate-btn";
   const SIDEBAR_ID = "promptmate-sidebar";
   const LAYOUT_SELECTOR = "div.relative.flex.h-full.w-full.flex-row";
 
-  // JSON definitions for Tone and Output Format
-  const TONE_OPTIONS = [
-    {
-      option: 'Formal / Professional',
-      category: 'Neutral / Pro',
-      instruction: 'Use clear, concise, and formal language suitable for business or technical documentation. Avoid contractions and maintain a respectful, polished tone.'
-    },
-    {
-      option: 'Neutral / Informative',
-      category: 'Neutral / Pro',
-      instruction: 'Use clear, objective language. Focus on clarity and completeness without being too casual or too formal. Ideal for tutorials, explainers, or internal knowledge sharing.'
-    },
-    {
-      option: 'Friendly & Conversational',
-      category: 'Conversational',
-      instruction: 'Use a warm, approachable tone as if speaking to a colleague. Use contractions, rhetorical questions, and analogies where helpful.'
-    },
-    {
-      option: 'Casual / Relaxed',
-      category: 'Conversational',
-      instruction: 'Keep it light, informal, and easygoing. Use everyday language, humor (if appropriate), and a laid-back tone as if chatting with a peer.'
-    },
-    {
-      option: 'Playful / Humorous',
-      category: 'Creative',
-      instruction: 'Make the explanation fun and witty. Use puns, jokes, or quirky analogies to make the topic entertaining while still informative.'
-    },
-    {
-      option: 'Inspirational / Motivational',
-      category: 'Creative',
-      instruction: 'Inspire the reader. Use uplifting language, motivating phrases, and stories of progress or success to encourage action and growth.'
-    },
-    {
-      option: 'Expert & Analytical',
-      category: 'Authority',
-      instruction: 'Use precise, technical language. Focus on deep insights, data-backed reasoning, and high-level conceptual clarity. Assume the reader has strong foundational knowledge.'
-    },
-    {
-      option: 'Persuasive / Salesy',
-      category: 'Authority',
-      instruction: 'Emphasize benefits, outcomes, and urgency. Use persuasive language and calls-to-action as if selling a service or pitching a solution.'
-    },
-    {
-      option: 'Storytelling / Dramatic',
-      category: 'Narrative',
-      instruction: 'Frame the explanation as a compelling narrative. Use tension, characters (real or metaphorical), and vivid descriptions to engage the reader emotionally.'
-    },
-    {
-      option: "Technical / Educational",
-      category: "Neutral / Pro",
-      instruction: "Use clear, structured explanations with defined terminology, examples, and step-by-step guidance. Include conceptual foundations followed by practical applications, as if teaching a complex topic to an interested learner."
-    },
-    {
-      option: "Business Persuasive",
-      category: "Authority",
-      instruction: "Present logical arguments, evidence, and recommendations in a professional manner. Focus on business value, ROI, and strategic implications while maintaining credibility through balanced analysis and acknowledgment of trade-offs."
-    },
-    {
-      option: "Concise / Brief",
-      category: "Neutral / Pro",
-      instruction: "Prioritize brevity and directness. Use bullet points, short sentences, and minimal explanations. Focus only on essential information, key facts, and actionable insights without elaboration or examples unless requested."
-    },
-    {
-      option: "Executive Summary",
-      category: "Authority",
-      instruction: "Present high-level insights, strategic implications, and business outcomes first. Minimize technical details while emphasizing impact, risks, and recommendations. Structure content for quick scanning by busy decision-makers with limited time."
-    },
-    {
-      option: 'Custom…',
-      category: 'Other',
-      instruction: ''
-    }
-  ];
-
-  const FORMAT_OPTIONS = [
-    {
-      option: 'Structured Explanation with Examples',
-      category: 'Informational',
-      instruction: 'Return the answer using structured headings (H2 or H3), bullet points where applicable, and include real-world examples to contextualize the learning.'
-    },
-    {
-      option: 'Checklist + Scenario-Based Hints',
-      category: 'Exam-Focused',
-      instruction: 'Use a checklist format for factual recall, and include 1–2 scenario-style tips or mini case studies that demonstrate how these facts apply in real-world or exam-style situations.'
-    },
-    {
-      option: 'Paragraph(s)',
-      category: 'Plain',
-      instruction: 'Return the answer as structured, cohesive paragraphs suitable for reading as an article or blog post.'
-    },
-    {
-      option: 'Bulleted List',
-      category: 'Plain',
-      instruction: 'Format the answer using concise bullet points. Ideal for quick reference, lists, or summarizing multiple items.'
-    },
-    {
-      option: 'Numbered Steps',
-      category: 'Plain',
-      instruction: 'Present the answer as step-by-step numbered instructions, useful for guides, tutorials, or procedures.'
-    },
-    {
-      option: 'Markdown Table',
-      category: 'Tables / Data',
-      instruction: 'Return the answer using a Markdown table with clear headers. Ideal for comparisons, feature lists, or tabular data.'
-    },
-    {
-      option: 'Comparison Table',
-      category: 'Tables / Data',
-      instruction: 'Provide a Markdown table comparing multiple items across key attributes. Include columns like Pros, Cons, and Use Cases.'
-    },
-    {
-      option: 'JSON Object',
-      category: 'Tables / Data',
-      instruction: 'Respond only with valid JSON. Ideal for APIs, structured data, or input to another system.'
-    },
-    {
-      option: 'YAML',
-      category: 'Tables / Data',
-      instruction: 'Respond with a valid YAML block. Great for config files, Kubernetes manifests, or structured text.'
-    },
-    {
-      option: 'Code Block',
-      category: 'Code / Tech',
-      instruction: 'Return the content as plain code inside triple backtick (```) fenced code blocks. No extra explanation.'
-    },
-    {
-      option: 'Shell Commands',
-      category: 'Code / Tech',
-      instruction: 'List terminal commands line by line. Ideal for CLI walkthroughs or automation snippets.'
-    },
-    {
-      option: 'Slide Deck Format',
-      category: 'Presentations',
-      instruction: 'Break the content into slide-style bullet points or sectioned headers, ready to be turned into a presentation.'
-    },
-    {
-      option: 'Flowchart Description',
-      category: 'Visual / Logic',
-      instruction: 'Describe the logic or steps in a flowchart-friendly format using indents or arrows (→). Great for decision-making or process flows.'
-    },
-    {
-      option: 'TL;DR (≤ 50 words)',
-      category: 'Summaries',
-      instruction: 'Summarize the entire response in one clear sentence under 50 words.'
-    },
-    {
-      option: 'Bullet + Paragraph Hybrid',
-      category: 'Plain',
-      instruction: 'Use a heading or topic followed by a short paragraph. Useful when you want clarity without full narrative depth.'
-    },
-    {
-      option: "FAQ Style",
-      category: "Informational",
-      instruction: "Structure the answer as a series of anticipated questions and their answers. Ideal for troubleshooting guides, product information, or complex concepts broken into discrete chunks."
-    },
-    {
-      option: "Decision Matrix",
-      category: "Visual / Logic",
-      instruction: "Present options against weighted criteria in a table format, with scores or ratings for each combination. Include a summary recommendation based on the highest-scoring option(s)."
-    },
-    {
-      option: "Executive Brief",
-      category: "Summaries",
-      instruction: "Structure as: 1) Key takeaway (1-2 sentences), 2) Context (2-3 sentences), 3) 3-5 bullet points of implications or recommendations, 4) Next steps if applicable. Keep entire response under 250 words."
-    },
-    {
-      option: "Canvas Framework",
-      category: "Visual / Logic",
-      instruction: "Structure the information as sections of a business or planning canvas (like Business Model Canvas, Value Proposition Canvas, etc.). Label each section clearly with headings and use bullets for individual elements."
-    },
-    {
-      option: 'Custom…',
-      category: 'Other',
-      instruction: ''
-    }
-  ];
-  // 1️⃣ Create or re-create the header button
+  // Create or re-create the header button
   function createPromptMateButton() {
     if (document.getElementById(BUTTON_ID)) return;
     const container = document.getElementById("conversation-header-actions");
@@ -201,7 +35,7 @@
     container.appendChild(btn);
   }
 
-  // 2️⃣ Toggle sidebar visibility & layout shift
+  // Toggle sidebar visibility & layout shift
   function toggleSidebar() {
     let sb = document.getElementById(SIDEBAR_ID);
     if (!sb) sb = createSidebar();
@@ -215,7 +49,7 @@
     }
   }
 
-  // 3️⃣ Create the sidebar (only once)
+  // Create the sidebar (only once)
   function createSidebar() {
     const layout = document.querySelector(LAYOUT_SELECTOR);
     if (!layout) return;
@@ -327,19 +161,7 @@
     return sb;
   }
 
-  // 4️⃣ STORAGE HELPERS
-  function loadPrompts(callback) {
-    chrome.storage.local.get({ [STORAGE_KEY]: [] }, ({ [STORAGE_KEY]: prompts }) => {
-      callback(prompts);
-    });
-  }
-
-  // 5️⃣ Save Prompts
-  function savePrompts(prompts) {
-    chrome.storage.local.set({ [STORAGE_KEY]: prompts });
-  }
-
-  // 6️⃣ Create a single prompt-item element wired up to insert text
+  // Create a single prompt-item element wired up to insert text
   function createPromptItem(prompt) {
     // Container for the prompt item (stacked layout)
     const item = document.createElement('div');
@@ -460,33 +282,7 @@
     return item;
   }
 
-  // 7️⃣ Create Input fields
-  function makeInputField({ id, label, type = "text", placeholder = "" }) {
-    const wrapper = document.createElement("label");
-    wrapper.className = "flex flex-col gap-1 mb-3";
-    wrapper.htmlFor = id;
-
-    const lbl = document.createElement("span");
-    lbl.textContent = label;
-    lbl.className = "text-sm font-medium text-token-text-primary";
-
-    const input = document.createElement(type === "textarea" ? "textarea" : "input");
-    input.id = id;
-    input.placeholder = placeholder;
-    input.className = `
-          bg-token-main-surface-secondary
-          border border-token-border-secondary
-          rounded px-2 py-1 text-token-text-primary
-          focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-token-accent
-        `;
-    if (type !== "textarea") input.type = type;
-    else input.rows = 3;
-
-    wrapper.append(lbl, input);
-    return wrapper;
-  }
-
-  // 8️⃣ Create the prompt modal
+  // Create the prompt modal
   function createPromptModal() {
     if (document.querySelector('[data-testid="promptmate-modal"]')) return;
 
@@ -555,7 +351,7 @@
     document.body.appendChild(overlay);
   }
 
-  // 9️⃣ Open/Close the prompt modal
+  // Open/Close the prompt modal
   function openPromptModal() {
     createPromptModal();
     document.querySelector('[data-testid="promptmate-modal"]').classList.remove("hidden");
@@ -568,7 +364,7 @@
     document.querySelector('[data-testid="promptmate-modal"]').classList.add("hidden");
   }
 
-  // 1️⃣0️⃣ Save the new prompt
+  // Save the new prompt
   function onSaveNewPrompt() {
     const modal = document.querySelector('[data-testid="promptmate-modal"]');
     const editId = modal.dataset.editPromptId;
@@ -603,7 +399,7 @@
           format: formatOption
         };
         list.push(newPrompt);
-         recordAnalytics('created');
+        recordAnalytics('created');
       }
       savePrompts(list);
       closePromptModal();
@@ -612,9 +408,6 @@
 
 
   }
-
-  // Render list with Title & PromptBody; clicking injects full prompt (body + tone + format)
-
 
   function openEditModal(prompt) {
     // Ensure the modal setup is initialized (in case new prompt creation ran earlier)
@@ -640,73 +433,6 @@
     });
   }
 
-  function recordAnalytics(action) {
-    chrome.storage.local.get(['analytics'], (result) => {
-      const analytics = result.analytics || {
-        created: 0,
-        used: 0,
-        copied: 0,
-        edited: 0,
-        deleted: 0
-      };
-      analytics[action] = (analytics[action] || 0) + 1;
-      chrome.storage.local.set({ analytics });
-    });
-  }
-
-  function shareAnalytics() {
-    chrome.storage.local.get(['analytics'], (result) => {
-      const analytics = result.analytics || {
-        created: 0,
-        used: 0,
-        copied: 0,
-        edited: 0,
-        deleted: 0
-      };
-      const summary = `${analytics.created} prompts created, ${analytics.used} times used, ${analytics.edited} times edited, ${analytics.copied} times copied and ${analytics.deleted} times deleted`;
-      navigator.clipboard.writeText(summary).then(() => {
-        alert('Analytics copied to clipboard! \n' + summary);
-      });
-    });
-  }
-
-  // Utility: create a select dropdown with optgroups
-  function makeSelectField({ id, label, options }) {
-    const wrapper = document.createElement('label');
-    wrapper.className = 'flex flex-col gap-1 mb-3';
-    wrapper.htmlFor = id;
-
-    const lbl = document.createElement('span');
-    lbl.textContent = label;
-    lbl.className = 'text-sm font-medium text-token-text-primary';
-
-    const select = document.createElement('select');
-    select.id = id;
-    select.className = `
-          bg-token-main-surface-secondary
-          border border-token-border-secondary
-          rounded px-2 py-1 text-token-text-primary
-          focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-token-accent
-        `;
-
-    // group options by category
-    const categories = [...new Set(options.map(o => o.category))];
-    categories.forEach(cat => {
-      const optgroup = document.createElement('optgroup');
-      optgroup.label = cat;
-      options.filter(o => o.category === cat).forEach(o => {
-        const opt = document.createElement('option');
-        opt.value = o.option;
-        opt.textContent = o.option;
-        opt.dataset.instruction = o.instruction;
-        optgroup.appendChild(opt);
-      });
-      select.appendChild(optgroup);
-    });
-
-    wrapper.append(lbl, select);
-    return wrapper;
-  }
 
   // React-safe re-injection
   const obs = new MutationObserver(createPromptMateButton);

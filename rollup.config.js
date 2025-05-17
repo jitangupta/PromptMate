@@ -5,7 +5,7 @@ import postcss from 'rollup-plugin-postcss';
 
 export default [
   {
-    input: 'gpt-content.js',
+    input: 'scripts/gpt-content.js',
     output: {
       file: 'dist/gpt-content.bundle.js',
       format: 'iife',
