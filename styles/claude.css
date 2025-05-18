@@ -1,0 +1,34 @@
+.btn-xs {
+  font-size: 14px;
+  padding: 0px 5px;
+  border-radius: 5px;
+  line-height: 1.7;
+}
+
+.btn-xs.use {
+  padding: 0px 10px;
+}
+.btn-xs.delete {
+  padding: 0px 2px;
+}
+.btn-pm {
+  margin: 1rem;
+    padding: 0.5rem;
+    background: #4caf50;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    margin-bottom: 0px;
+}
+.btn-analytics {
+  margin:0 1rem 1rem 1rem;padding:0.5rem;background:#999;color:white;border:none;border-radius:5px;
+}
+.pm-list {
+  flex:1;overflow-y:auto;padding:0.5rem;margin-top: -12px;
+}
+.pm-heading{
+  padding: 1rem; font-weight: bold; display: flex; justify-content: space-between; border-bottom: 1px solid #ccc;
+}
+.prompt-item{
+  margin-bottom:0.75rem;padding:0.5rem;border-radius:5px;background:#e8e6dc;
+}
