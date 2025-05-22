@@ -215,8 +215,19 @@ export function recordAnalytics(action) {
 /**
  * Share analytics with the user.
  */
-export  function shareAnalytics() {
+/**
+ * Retrieves analytics data, copies it to the clipboard, and returns a summary string.
+ * @param {function(string, Error?)} callback - Called with the summary string and an optional error.
+ */
+export function shareAnalytics(callback) {
     chrome.storage.local.get(['analytics'], (result) => {
+      if (chrome.runtime.lastError) {
+        console.error("[PromptMate] business.js: Error fetching analytics:", chrome.runtime.lastError);
+        if (typeof callback === 'function') {
+            callback(null, chrome.runtime.lastError);
+        }
+        return;
+      }
       const analytics = result.analytics || {
         created: 0,
         used: 0,
@@ -224,9 +235,20 @@ export  function shareAnalytics() {
         edited: 0,
         deleted: 0
       };
-      const summary = `${analytics.created} prompts created, ${analytics.used} times used, ${analytics.edited} times edited, ${analytics.copied} times copied and ${analytics.deleted} times deleted`;
-      navigator.clipboard.writeText(summary).then(() => {
-        alert('Analytics copied to clipboard! \n' + summary);
-      });
+      const summary = `${analytics.created} prompts created, ${analytics.used} times used, ${analytics.edited} times edited, ${analytics.copied} times copied and ${analytics.deleted} times deleted.`;
+      
+      navigator.clipboard.writeText(summary)
+        .then(() => {
+          if (typeof callback === 'function') {
+            callback(summary); // Pass summary to callback on successful copy
+          }
+        })
+        .catch(err => {
+          console.error("[PromptMate] business.js: Failed to copy analytics to clipboard:", err);
+          if (typeof callback === 'function') {
+            // Still pass the summary, but also include the error
+            callback(summary, err); 
+          }
+        });
     });
   }

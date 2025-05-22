@@ -1,0 +1,151 @@
+/* styles/gpt.css */
+
+/* Styles for the PromptMate sidebar on ChatGPT */
+#promptmate-sidebar-gpt {
+  width: 260px;
+  height: 100%;
+  position: fixed;
+  top: 0;
+  right: -260px; /* Initially hidden */
+  background: var(--token-sidebar-surface-primary, #1e1e1e); /* Fallback to a dark color */
+  z-index: 9999;
+  transition: right 0.3s ease-in-out;
+  box-shadow: -2px 0 5px rgba(0,0,0,0.3);
+  display: flex;
+  flex-direction: column;
+  color: #fff; /* Default text color */
+}
+
+/* When the sidebar is open ('.show' class is added) */
+#promptmate-sidebar-gpt.show {
+  right: 0;
+}
+
+/* Additional styles for internal elements if needed, can be added here.
+   For example, if sidebarInnerDivClasses from gptUiConfig also contained
+   styles that are better off here. For now, focusing on sidebarStyles.
+*/
+
+/* Styling for the header within the sidebar */
+#promptmate-sidebar-gpt #promptmate-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem;
+  font-weight: bold;
+  font-size: 16px;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+
+#promptmate-sidebar-gpt #promptmate-header .close-btn {
+  background: none;
+  border: none;
+  font-size: 24px; /* Made slightly larger for easier clicking */
+  color: #bbb;
+  cursor: pointer;
+  padding: 0.25rem 0.5rem; /* Added padding for better click area */
+}
+
+#promptmate-sidebar-gpt #promptmate-header .close-btn:hover {
+  color: #fff;
+}
+
+/* Styling for the prompt list area */
+#promptmate-sidebar-gpt #promptmate-list {
+  /* Uses promptListClasses from gptUiConfig for flex, overflow, padding */
+  /* Example: .flex-1, .overflow-y-auto, .p-[0.75rem] */
+  /* No specific structural styles needed here if classes handle it */
+}
+
+/* Styling for individual prompt items.
+   These are mostly handled by promptItemClasses from gptUiConfig.
+   Example: .prompt-item, .flex, .flex-col, .p-2, .border-b, etc.
+   However, we can add base styles or overrides if necessary.
+*/
+#promptmate-sidebar-gpt .prompt-item {
+  /* Base styles if not covered by utility classes from config */
+  /* For example, if bg-[#2c2c2c] etc. were not in config:
+     background-color: #2c2c2c;
+     margin-bottom: 0.5rem;
+     padding: 0.5rem;
+     border-radius: 6px;
+     cursor: pointer;
+  */
+}
+
+#promptmate-sidebar-gpt .prompt-item:hover {
+  /* Example: background-color: #3a3a3a; */
+}
+
+
+/* Styling for buttons within the sidebar */
+#promptmate-sidebar-gpt #add-prompt-btn,
+#promptmate-sidebar-gpt #pm-share-analytics {
+  margin: 0.75rem;
+  padding: 0.5rem 0.75rem; /* Adjusted padding */
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  text-align: center;
+  font-size: 14px; /* Consistent font size */
+}
+
+#promptmate-sidebar-gpt #add-prompt-btn {
+  background: #4caf50; /* Green */
+  color: white;
+}
+
+#promptmate-sidebar-gpt #add-prompt-btn:hover {
+  background: #45a045;
+}
+
+#promptmate-sidebar-gpt #pm-share-analytics {
+  background: var(--token-button-secondary-background, #555); /* Using a variable if available or fallback */
+  color: var(--token-button-secondary-text, white); /* Using a variable for text or fallback */
+  /* Classes like 'btn btn-secondary' from gptUiConfig might handle this better if they are comprehensive */
+}
+
+#promptmate-sidebar-gpt #pm-share-analytics:hover {
+  background: var(--token-button-secondary-hover-background, #666);
+}
+
+/* Action buttons inside prompt items (Use, Copy, Edit, Delete) */
+#promptmate-sidebar-gpt .prompt-item .btn-xs {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.75rem; /* 12px */
+    border-radius: 0.25rem;
+    color: white; /* Default for these small buttons */
+}
+
+#promptmate-sidebar-gpt .prompt-item .btn-xs.use {
+    background-color: var(--token-accent, #4A90E2); /* Example accent color */
+}
+#promptmate-sidebar-gpt .prompt-item .btn-xs.use:hover {
+    filter: brightness(110%);
+}
+
+#promptmate-sidebar-gpt .prompt-item .btn-icon {
+    background-color: transparent;
+    border: none;
+    padding: 0.25rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+#promptmate-sidebar-gpt .prompt-item .btn-icon:hover svg {
+    filter: brightness(120%);
+}
+
+#promptmate-sidebar-gpt .prompt-item .btn-icon svg {
+    fill: currentColor; /* Ensure SVGs inherit color */
+    width: 18px; /* Slightly smaller for icon buttons */
+    height: 18px;
+}
+
+/* Ensure the inner div of the sidebar takes up full height and allows content to scroll */
+#promptmate-sidebar-gpt > div:first-child {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden; /* The inner div itself shouldn't scroll, but its children (like #promptmate-list) should */
+}
