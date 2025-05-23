@@ -67,7 +67,7 @@ import { makeClaudeInputField, makeClaudeSelectField, createSvgImage } from './u
     }
 
     function createSidebar() {
-        const container = document.querySelector('div.flex.min-h-screen.w-full.overflow-x-hidden');
+        const container = document.querySelector('div.flex.min-h-screen.w-full');
         if (!container) return;
 
         const sb = document.createElement('div');

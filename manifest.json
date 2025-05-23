@@ -1,12 +1,11 @@
 {
   "manifest_version": 3,
   "name": "PromptMate",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Your prompts. One click away.",
   "permissions": [
     "storage",
-    "scripting",
-    "tabs"
+    "scripting"
   ],
   "host_permissions": [
     "*://chatgpt.com/*",
