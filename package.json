@@ -5,8 +5,9 @@
   "main": "background.js",
   "scripts": {
     "build": "rollup -c",
+    "build:prod": "rollup -c --environment BUILD:production",
     "build:package": "node scripts/package/build-package.js",
-    "release": "npm run build && npm run build:package",
+    "release": "npm run build:prod && npm run build:package",
     "test": "jest",
     "watch": "rollup -c -w"
   },

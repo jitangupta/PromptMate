@@ -7,12 +7,24 @@ import {
   shareAnalytics
 } from './business.js';
 
-import { makeInputField, makeSelectField } from './utility.js';
+import {
+  makeInputField,
+  makeSelectField,
+  makeSignInButton,
+  makeAuthFooter,
+} from './utility.js';
+
+import {
+  subscribeAuthState,
+  refreshAuthState,
+  performSignIn,
+  performSignOut,
+} from './sidebar-auth.js';
 
 (function initPromptMateIntegration() {
   const BUTTON_ID = "promptmate-btn";
   const SIDEBAR_ID = "promptmate-sidebar";
-  const LAYOUT_SELECTOR = "div.relative.flex.h-full.w-full.flex-row";
+  const LAYOUT_SELECTOR = "div.relative.flex.w-full";
 
   // Create or re-create the header button
   function createPromptMateButton() {
@@ -47,6 +59,8 @@ import { makeInputField, makeSelectField } from './utility.js';
       layout.style.transition = "margin-right 0.3s ease";
       layout.style.marginRight = isOpen ? "260px" : "";
     }
+
+    if (isOpen) refreshAuthState();
   }
 
   // Create the sidebar (only once)
@@ -131,34 +145,73 @@ import { makeInputField, makeSelectField } from './utility.js';
             PromptMate
             <button class="close-btn" aria-label="Close">&times;</button>
           </div>
-          <div id="promptmate-list"></div>
-          <button id="add-prompt-btn">+ Add Prompt</button>
-          <button id="pm-share-analytics" class="btn btn-secondary mb-4 mx-3 rounded">Share Analytics</button>
+          <div id="promptmate-body" style="flex:1;display:flex;flex-direction:column;overflow:hidden;"></div>
+          <div id="promptmate-footer"></div>
         `;
 
-    // Bind open/close and prompt actions
     sb.querySelector(".close-btn").addEventListener("click", toggleSidebar);
 
-    const listEl = sb.querySelector("#promptmate-list");
-    renderPromptList(listEl);
-
-    sb.querySelectorAll(".prompt-item").forEach(item => {
-      item.addEventListener("click", () => {
-        const t = document.querySelector("textarea");
-        if (t) {
-          t.value = item.textContent;
-          t.dispatchEvent(new Event("input", { bubbles: true }));
-          t.focus();
-        }
-      });
-    });
-    sb.querySelector("#add-prompt-btn").addEventListener("click", openPromptModal);
-    sb.querySelector("#pm-share-analytics").addEventListener("click", shareAnalytics);
-    // If click button won't work, use
-    // document.getElementById("add-prompt-btn").addEventListener("click", openPromptModal);
-
     layout.appendChild(sb);
+
+    subscribeAuthState((state) => renderSidebarBody(sb, state));
+    refreshAuthState();
+
     return sb;
+  }
+
+  function renderSidebarBody(sb, state) {
+    const body = sb.querySelector("#promptmate-body");
+    const footer = sb.querySelector("#promptmate-footer");
+    if (!body || !footer) return;
+
+    body.innerHTML = "";
+    footer.innerHTML = "";
+
+    if (state.loading && !state.signedIn && !state.message) {
+      const loading = document.createElement("p");
+      loading.className = "text-sm text-token-text-secondary p-4 text-center";
+      loading.textContent = "Loading…";
+      body.appendChild(loading);
+      return;
+    }
+
+    if (!state.signedIn) {
+      body.appendChild(
+        makeSignInButton({
+          onClick: () => performSignIn().catch((err) => console.warn("PromptMate: sign-in failed", err)),
+          message: state.message,
+          loading: state.loading,
+        })
+      );
+      return;
+    }
+
+    const list = document.createElement("div");
+    list.id = "promptmate-list";
+    body.appendChild(list);
+
+    const addBtn = document.createElement("button");
+    addBtn.id = "add-prompt-btn";
+    addBtn.textContent = "+ Add Prompt";
+    addBtn.addEventListener("click", openPromptModal);
+    body.appendChild(addBtn);
+
+    const shareBtn = document.createElement("button");
+    shareBtn.id = "pm-share-analytics";
+    shareBtn.className = "btn btn-secondary mb-4 mx-3 rounded";
+    shareBtn.textContent = "Share Analytics";
+    shareBtn.addEventListener("click", shareAnalytics);
+    body.appendChild(shareBtn);
+
+    renderPromptList(list);
+
+    footer.appendChild(
+      makeAuthFooter({
+        email: state.email,
+        onSignOut: () =>
+          performSignOut().catch((err) => console.warn("PromptMate: sign-out failed", err)),
+      })
+    );
   }
 
   // Create a single prompt-item element wired up to insert text

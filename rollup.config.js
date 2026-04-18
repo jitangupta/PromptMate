@@ -3,6 +3,10 @@ import commonjs from '@rollup/plugin-commonjs';
 import { terser } from 'rollup-plugin-terser';
 import postcss from 'rollup-plugin-postcss';
 
+const isProd = process.env.BUILD === 'production';
+
+const maybeTerser = () => (isProd ? [terser()] : []);
+
 export default [
   {
     input: 'scripts/gpt-content.js',
@@ -16,10 +20,10 @@ export default [
       commonjs(),
       postcss({
         inject: true,
-        minimize: true,
+        minimize: isProd,
         extensions: ['.css']
       }),
-      terser()
+      ...maybeTerser()
     ]
   },
   {
@@ -34,10 +38,10 @@ export default [
       commonjs(),
       postcss({
         inject: true,
-        minimize: true,
+        minimize: isProd,
         extensions: ['.css']
       }),
-      terser()
+      ...maybeTerser()
     ]
   },
   {
@@ -50,7 +54,7 @@ export default [
     plugins: [
       resolve(),
       commonjs(),
-      terser()
+      ...maybeTerser()
     ]
   }
 ];

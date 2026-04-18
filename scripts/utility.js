@@ -61,6 +61,53 @@ export function makeSelectField({ id, label, options }) {
     return wrapper;
 }
 
+export function makeSignInButton({ onClick, message, loading } = {}) {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'flex flex-col gap-3 p-4 text-center';
+
+    const heading = document.createElement('p');
+    heading.className = 'text-sm text-token-text-secondary';
+    heading.textContent = 'Sign in to sync your prompts with Google Drive.';
+    wrapper.appendChild(heading);
+
+    if (message) {
+        const note = document.createElement('p');
+        note.className = 'text-xs text-red-400';
+        note.textContent = message;
+        wrapper.appendChild(note);
+    }
+
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn btn-primary w-full';
+    btn.textContent = loading ? 'Signing in…' : 'Sign in with Google';
+    btn.disabled = !!loading;
+    if (onClick) btn.addEventListener('click', onClick);
+    wrapper.appendChild(btn);
+
+    return wrapper;
+}
+
+export function makeAuthFooter({ email, onSignOut } = {}) {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'flex items-center justify-between gap-2 px-3 py-2 text-xs text-token-text-secondary border-t border-token-border-secondary';
+
+    const emailEl = document.createElement('span');
+    emailEl.className = 'truncate';
+    emailEl.title = email || '';
+    emailEl.textContent = email || 'Signed in';
+    wrapper.appendChild(emailEl);
+
+    const signOutBtn = document.createElement('button');
+    signOutBtn.type = 'button';
+    signOutBtn.className = 'underline hover:text-token-text-primary';
+    signOutBtn.textContent = 'Sign out';
+    if (onSignOut) signOutBtn.addEventListener('click', onSignOut);
+    wrapper.appendChild(signOutBtn);
+
+    return wrapper;
+}
+
 export function createSvgImage(svgIcon){
     const encoded = encodeURIComponent(svgIcon);
     const img = document.createElement('img');
@@ -95,6 +142,53 @@ export function makeClaudeInputField({ id, label, type = "text", placeholder = "
     else input.rows = 3;
 
     wrapper.append(lbl, input);
+    return wrapper;
+}
+
+export function makeClaudeSignInButton({ onClick, message, loading } = {}) {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'flex flex-col gap-3 p-4 text-center';
+
+    const heading = document.createElement('p');
+    heading.className = 'text-text-200 text-sm';
+    heading.textContent = 'Sign in to sync your prompts with Google Drive.';
+    wrapper.appendChild(heading);
+
+    if (message) {
+        const note = document.createElement('p');
+        note.className = 'text-xs text-danger-000';
+        note.textContent = message;
+        wrapper.appendChild(note);
+    }
+
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'inline-flex items-center justify-center text-sm px-4 py-2 rounded-lg bg-accent-main-000 text-white';
+    btn.textContent = loading ? 'Signing in…' : 'Sign in with Google';
+    btn.disabled = !!loading;
+    if (onClick) btn.addEventListener('click', onClick);
+    wrapper.appendChild(btn);
+
+    return wrapper;
+}
+
+export function makeClaudeAuthFooter({ email, onSignOut } = {}) {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'flex items-center justify-between gap-2 px-3 py-2 text-xs text-text-300 border-t border-border-300';
+
+    const emailEl = document.createElement('span');
+    emailEl.className = 'truncate';
+    emailEl.title = email || '';
+    emailEl.textContent = email || 'Signed in';
+    wrapper.appendChild(emailEl);
+
+    const signOutBtn = document.createElement('button');
+    signOutBtn.type = 'button';
+    signOutBtn.className = 'underline hover:text-text-100';
+    signOutBtn.textContent = 'Sign out';
+    if (onSignOut) signOutBtn.addEventListener('click', onSignOut);
+    wrapper.appendChild(signOutBtn);
+
     return wrapper;
 }
 

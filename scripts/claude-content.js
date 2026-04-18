@@ -7,7 +7,20 @@ import {
     shareAnalytics
 } from './business.js';
 
-import { makeClaudeInputField, makeClaudeSelectField, createSvgImage } from './utility.js';
+import {
+    makeClaudeInputField,
+    makeClaudeSelectField,
+    createSvgImage,
+    makeClaudeSignInButton,
+    makeClaudeAuthFooter,
+} from './utility.js';
+
+import {
+    subscribeAuthState,
+    refreshAuthState,
+    performSignIn,
+    performSignOut,
+} from './sidebar-auth.js';
 
 (function initClaudePromptMate() {
     const BUTTON_ID = 'promptmate-btn';
@@ -58,6 +71,7 @@ import { makeClaudeInputField, makeClaudeSelectField, createSvgImage } from './u
             firstChild.classList.add('shadow-lg', '!bg-bg-200', 'lg:shadow-[inset_-4px_0px_6px_-4px_hsl(var(--always-black)/4%)]')
             firstChild.style.transition = 'width 0.3s ease';
             sidebar.style.width = '17rem';
+            refreshAuthState();
         } else {
             firstChild.style.width = 0;
             firstChild.classList.remove('shadow-lg', '!bg-bg-200', 'lg:shadow-[inset_-4px_0px_6px_-4px_hsl(var(--always-black)/4%)]')
@@ -67,7 +81,7 @@ import { makeClaudeInputField, makeClaudeSelectField, createSvgImage } from './u
     }
 
     function createSidebar() {
-        const container = document.querySelector('div.flex.min-h-screen.w-full');
+        const container = document.querySelector("div#root>div>div>div");
         if (!container) return;
 
         const sb = document.createElement('div');
@@ -81,20 +95,83 @@ import { makeClaudeInputField, makeClaudeSelectField, createSvgImage } from './u
                 PromptMate
                 <button class="close-btn" style="background:none;border:none;font-size:18px;cursor:pointer;">×</button>
             </div>
-            <div id="promptmate-list" class="pm-list"></div>
-            <button id="add-prompt-btn" class="btn-pm">+ Add Prompt</button>
-            <button id="pm-share-analytics" class="btn-analytics">Share Analytics</button>
+            <div id="promptmate-body" style="flex:1;display:flex;flex-direction:column;overflow:hidden;"></div>                                                                                   
+              <div id="promptmate-footer"></div>                                                                                                                                                    
+       </div>
             </div>
             `;
 
         sb.querySelector('.close-btn').addEventListener('click', toggleSidebar);
-        sb.querySelector('#add-prompt-btn').addEventListener('click', openPromptModal);
-        sb.querySelector('#pm-share-analytics').addEventListener('click', shareAnalytics);
+        
 
         container.appendChild(sb);
-        renderPromptList();
+
+        subscribeAuthState((state) => renderSidebarBody(sb, state));
+        refreshAuthState();
 
         return sb;
+    }
+
+    function renderSidebarBody(sb, state) {
+        const body = sb.querySelector('#promptmate-body');
+        const footer = sb.querySelector('#promptmate-footer');
+        if (!body || !footer) return;
+
+        body.innerHTML = '';
+        footer.innerHTML = '';
+
+        if (state.loading && !state.signedIn && !state.message) {
+            const loading = document.createElement('p');
+            loading.className = 'text-text-200 text-sm p-4 text-center';
+            loading.textContent = 'Loading…';
+            body.appendChild(loading);
+            return;
+        }
+
+        if (!state.signedIn) {
+            body.appendChild(
+                makeClaudeSignInButton({
+                    onClick: () =>
+                        performSignIn().catch((err) =>
+                            console.warn('PromptMate: sign-in failed', err)
+                        ),
+                    message: state.message,
+                    loading: state.loading,
+                })
+            );
+            return;
+        }
+
+        const list = document.createElement('div');
+        list.id = 'promptmate-list';
+        list.className = 'pm-list';
+        body.appendChild(list);
+
+        const addBtn = document.createElement('button');
+        addBtn.id = 'add-prompt-btn';
+        addBtn.className = 'btn-pm';
+        addBtn.textContent = '+ Add Prompt';
+        addBtn.addEventListener('click', openPromptModal);
+        body.appendChild(addBtn);
+
+        const shareBtn = document.createElement('button');
+        shareBtn.id = 'pm-share-analytics';
+        shareBtn.className = 'btn-analytics';
+        shareBtn.textContent = 'Share Analytics';
+        shareBtn.addEventListener('click', shareAnalytics);
+        body.appendChild(shareBtn);
+
+        renderPromptList();
+
+        footer.appendChild(
+            makeClaudeAuthFooter({
+                email: state.email,
+                onSignOut: () =>
+                    performSignOut().catch((err) =>
+                        console.warn('PromptMate: sign-out failed', err)
+                    ),
+            })
+        );
     }
 
     function renderPromptList() {
