@@ -1,7 +1,7 @@
 {
   "name": "promptmate",
   "version": "1.0.0",
-  "description": "",
+  "description": "Chrome extension that adds a prompt-management sidebar to ChatGPT and Claude. Compose prompts from a reusable body plus tone and output-format presets, then insert them into the host with one click.",
   "main": "background.js",
   "scripts": {
     "build": "rollup -c",
@@ -10,9 +10,24 @@
     "test": "jest",
     "watch": "rollup -c -w"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "keywords": [
+    "chrome-extension",
+    "chatgpt",
+    "claude",
+    "prompts",
+    "productivity",
+    "llm",
+    "ai"
+  ],
+  "author": "Jitan Gupta <hi@jitangupta.com>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jitangupta/PromptMate.git"
+  },
+  "bugs": {
+    "url": "https://github.com/jitangupta/PromptMate/issues"
+  },
   "devDependencies": {
     "@rollup/plugin-commonjs": "^28.0.3",
     "@rollup/plugin-node-resolve": "^16.0.1",

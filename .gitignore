@@ -36,3 +36,14 @@ __MACOSX/
 *.ntvs*
 *.njsproj
 *.sln
+
+# Private planning docs (kept local, not published)
+tasks/
+notes/
+
+# Claude Code — contributor-local settings and credentials
+.claude/settings.local.json
+.claude/.credentials.json
+
+# OAuth signing key for stable dev extension ID (never commit)
+promptmate-key.pem

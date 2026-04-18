@@ -1,3 +1,1 @@
-chrome.runtime.onInstalled.addListener(() => {
-  console.log("PromptMate installed.");
-});
+chrome.runtime.onInstalled.addListener(() => {});
