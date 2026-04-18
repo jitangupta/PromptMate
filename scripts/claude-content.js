@@ -210,45 +210,84 @@ import {
         }
     }
 
+    function findClaudeInput() {
+        return (
+            document.querySelector('[data-testid="chat-input"]') ||
+            document.querySelector('[aria-label="Write your prompt to Claude"]') ||
+            document.querySelector('[contenteditable="true"][role="textbox"]') ||
+            document.querySelector('div.ProseMirror[contenteditable="true"]')
+        );
+    }
+
+    function composePromptText(prompt) {
+        const parts = [prompt.body || ''];
+        if (prompt.tone?.instruction) parts.push('', prompt.tone.instruction);
+        if (prompt.format?.instruction) parts.push(prompt.format.instruction);
+        return parts.join('\n');
+    }
+
+    function selectAllContent(el) {
+        const range = document.createRange();
+        range.selectNodeContents(el);
+        const sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(range);
+    }
+
+    function insertIntoClaudeInput(text) {
+        const el = findClaudeInput();
+        if (!el) return false;
+
+        el.focus();
+        selectAllContent(el);
+
+        try {
+            const dt = new DataTransfer();
+            dt.setData('text/plain', text);
+            const pasted = el.dispatchEvent(
+                new ClipboardEvent('paste', {
+                    clipboardData: dt,
+                    bubbles: true,
+                    cancelable: true,
+                })
+            );
+            if (pasted) return true;
+        } catch (err) {
+            console.warn('PromptMate: paste event failed, falling back to execCommand', err);
+        }
+
+        try {
+            return document.execCommand('insertText', false, text);
+        } catch (err) {
+            console.warn('PromptMate: execCommand insertText failed', err);
+            return false;
+        }
+    }
+
     function createPromptItem(prompt) {
         const item = document.createElement('div');
-        item.className = 'prompt-item bg-bg-000';
+        item.className = 'prompt-item';
 
         const titleEl = document.createElement('h3');
         titleEl.textContent = prompt.title;
-        titleEl.style = 'font-size:16px;';
         item.appendChild(titleEl);
 
         const preview = document.createElement('p');
         const body = prompt.body || '';
         preview.textContent = body.length > 40 ? body.slice(0, 40) + '…' : body;
-        preview.style = 'font-size:14px;color:#555;';
         item.appendChild(preview);
 
         const actions = document.createElement('div');
-        actions.style = 'margin-top:0.5rem;display:flex;gap:0.5rem;';
+        actions.style = 'margin-top:0.5rem;display:flex;gap:0.25rem;align-items:center;';
 
         const useBtn = document.createElement('button');
         useBtn.textContent = 'Use';
-        useBtn.className = 'bg-accent-main-000 btn-xs use';
-        useBtn.style = 'color:white;';
+        useBtn.className = 'btn-xs use';
         useBtn.onclick = () => {
             recordAnalytics('used');
-            const targetDiv = document.querySelector('div[aria-label="Write your prompt to Claude"]');
-            if (targetDiv) {
-                const placeholderP = targetDiv.querySelector(
-                    'p[data-placeholder="How can I help you today?"], p[data-placeholder="Reply to Claude..."]'
-                );
-                if (placeholderP) {
-                    placeholderP.remove();
-                }
-
-                var promptContainer = targetDiv.firstChild;
-                promptContainer.innerHTML = '';
-                var p = document.createElement('p');
-                p.textContent = `${prompt.body || ''}\n\n${prompt.tone?.instruction ?? ''}\n${prompt.format?.instruction ?? ''}`;
-                p.setAttribute('data-inserted', 'true'); 
-                promptContainer.appendChild(p);
+            const text = composePromptText(prompt);
+            if (!insertIntoClaudeInput(text)) {
+                console.warn('PromptMate: could not locate Claude input field');
             }
         };
 
