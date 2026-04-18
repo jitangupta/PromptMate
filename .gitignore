@@ -47,3 +47,7 @@ notes/
 
 # OAuth signing key for stable dev extension ID (never commit)
 promptmate-key.pem
+
+# Google OAuth client credentials download (not a real secret for Chrome extensions,
+# but Google's default filename pattern is alarming — keep out of the repo regardless)
+client_secret_*.json

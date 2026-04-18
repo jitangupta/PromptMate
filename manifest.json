@@ -3,14 +3,25 @@
   "name": "PromptMate",
   "version": "0.4.1",
   "description": "Your prompts. One click away.",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA0fmdfVyjSfu46+Wkl1vNKCl20PBbtGIlTXRwJHFQO55RacibnA1hOOf0lZ8Ot4nNyUHTWfZeHDTKC/4IFHmQSUjeCW7VCOP4nI19lsl93k+upbY1uOUJIStzGva6125w16acye2P8ebVRew9ppRH3a/COzpOpwX3pTnou9gfR8R8SJzRP1+rJyYXnltfYSH6tDvjIbvS9p6euoR0Xtd+fH3cj2YDvP/XTvzJtSTImnnEWpL3ydk/g3Z1igS3hIP4SP0ubgriQWHl6nPO7NduTpahUZR2jsmi1Zra0IDjU4nalB72vTGpmqlREXMQnyuUvvRy6e6lLEdQsP3X7zBQHwIDAQAB",
   "permissions": [
     "storage",
-    "scripting"
+    "scripting",
+    "identity"
   ],
   "host_permissions": [
     "*://chatgpt.com/*",
     "*://claude.ai/*"
   ],
+  "oauth2": {
+    "client_id": "281525799742-2choeaq1e1gnc199pbf79hqm7fk1cgc9.apps.googleusercontent.com",
+    "scopes": [
+      "https://www.googleapis.com/auth/drive.appdata",
+      "https://www.googleapis.com/auth/drive.file",
+      "https://www.googleapis.com/auth/userinfo.email",
+      "openid"
+    ]
+  },
   "action": {
     "default_popup": "popup/popup.html",
     "default_icon": {
