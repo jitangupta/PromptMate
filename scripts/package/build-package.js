@@ -14,8 +14,8 @@ async function main() {
   // recreate folder
   await fs.mkdirp(outDir);
 
-  // copy your dist, icons, popup and manifest.json
-  for (const item of ['dist', 'icons', 'popup', 'manifest.json']) {
+  // copy your dist, icons, popup, styles (referenced by manifest content_scripts) and manifest.json
+  for (const item of ['dist', 'icons', 'popup', 'styles', 'manifest.json']) {
     await fs.copy(path.join(root, item), path.join(outDir, item));
   }
 
