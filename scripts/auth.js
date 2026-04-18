@@ -3,6 +3,7 @@ const AUTH_MESSAGE = {
   signOut: "auth.signOut",
   getToken: "auth.getToken",
   isSignedIn: "auth.isSignedIn",
+  refreshToken: "auth.refreshToken",
 };
 
 function sendAuthMessage(type, payload) {
@@ -40,6 +41,10 @@ export function getToken({ interactive = false } = {}) {
 
 export function isSignedIn() {
   return sendAuthMessage(AUTH_MESSAGE.isSignedIn);
+}
+
+export function refreshToken(badToken) {
+  return sendAuthMessage(AUTH_MESSAGE.refreshToken, { badToken });
 }
 
 export const AUTH_MESSAGE_TYPES = AUTH_MESSAGE;

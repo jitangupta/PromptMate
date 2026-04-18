@@ -5,6 +5,7 @@ const AUTH_MESSAGE = {
   signOut: "auth.signOut",
   getToken: "auth.getToken",
   isSignedIn: "auth.isSignedIn",
+  refreshToken: "auth.refreshToken",
 };
 
 function getAuthToken(interactive) {
@@ -60,11 +61,18 @@ async function handleIsSignedIn() {
   return { signedIn: !!token };
 }
 
+async function handleRefreshToken({ badToken }) {
+  if (badToken) await removeCachedAuthToken(badToken);
+  const token = await getAuthToken(false);
+  return { token };
+}
+
 const HANDLERS = {
   [AUTH_MESSAGE.signIn]: handleSignIn,
   [AUTH_MESSAGE.signOut]: handleSignOut,
   [AUTH_MESSAGE.getToken]: handleGetToken,
   [AUTH_MESSAGE.isSignedIn]: handleIsSignedIn,
+  [AUTH_MESSAGE.refreshToken]: handleRefreshToken,
 };
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
