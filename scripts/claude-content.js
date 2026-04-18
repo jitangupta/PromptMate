@@ -1,8 +1,10 @@
 import {
     TONE_OPTIONS,
     FORMAT_OPTIONS,
-    loadPrompts,
-    savePrompts,
+    listPrompts,
+    savePrompt,
+    deletePrompt,
+    drainPendingWrites,
     recordAnalytics,
     shareAnalytics
 } from './business.js';
@@ -72,6 +74,9 @@ import {
             firstChild.style.transition = 'width 0.3s ease';
             sidebar.style.width = '17rem';
             refreshAuthState();
+            drainPendingWrites().catch((err) =>
+                console.warn('PromptMate: drain pending writes failed', err)
+            );
         } else {
             firstChild.style.width = 0;
             firstChild.classList.remove('shadow-lg', '!bg-bg-200', 'lg:shadow-[inset_-4px_0px_6px_-4px_hsl(var(--always-black)/4%)]')
@@ -178,10 +183,31 @@ import {
         const listEl = document.getElementById('promptmate-list');
         if (!listEl) return;
 
-        listEl.innerHTML = '';
-        loadPrompts(prompts => {
+        listPrompts((prompts, meta) => {
+            listEl.innerHTML = '';
             prompts.forEach(p => listEl.appendChild(createPromptItem(p)));
+            updateSyncIndicator(meta);
         });
+    }
+
+    function updateSyncIndicator(meta) {
+        const footer = document.getElementById('promptmate-footer');
+        if (!footer) return;
+        let indicator = footer.querySelector('#promptmate-sync-status');
+        if (!indicator) {
+            indicator = document.createElement('div');
+            indicator.id = 'promptmate-sync-status';
+            indicator.className = 'text-text-300';
+            indicator.style.cssText = 'font-size:11px;padding:0 1rem 0.5rem;';
+            footer.prepend(indicator);
+        }
+        if (meta?.pendingCount > 0) {
+            indicator.textContent = `${meta.pendingCount} change${meta.pendingCount > 1 ? 's' : ''} pending sync…`;
+        } else if (meta?.fromCache) {
+            indicator.textContent = 'Syncing…';
+        } else {
+            indicator.textContent = '';
+        }
     }
 
     function createPromptItem(prompt) {
@@ -194,7 +220,8 @@ import {
         item.appendChild(titleEl);
 
         const preview = document.createElement('p');
-        preview.textContent = prompt.promptBody.length > 40 ? prompt.promptBody.slice(0, 40) + '…' : prompt.promptBody;
+        const body = prompt.body || '';
+        preview.textContent = body.length > 40 ? body.slice(0, 40) + '…' : body;
         preview.style = 'font-size:14px;color:#555;';
         item.appendChild(preview);
 
@@ -219,7 +246,7 @@ import {
                 var promptContainer = targetDiv.firstChild;
                 promptContainer.innerHTML = '';
                 var p = document.createElement('p');
-                p.textContent = `${prompt.promptBody}\n\n${prompt.tone?.instruction ?? ''}\n${prompt.format?.instruction ?? ''}`;
+                p.textContent = `${prompt.body || ''}\n\n${prompt.tone?.instruction ?? ''}\n${prompt.format?.instruction ?? ''}`;
                 p.setAttribute('data-inserted', 'true'); 
                 promptContainer.appendChild(p);
             }
@@ -236,7 +263,7 @@ import {
         copyBtn.className = 'btn-xs';
         copyBtn.onclick =() => {
             recordAnalytics('copied');
-            let text = prompt.promptBody;
+            let text = prompt.body || '';
             if (prompt.tone) {
                 text += `\nTone (${prompt.tone.option}): ${prompt.tone.instruction}`;
             }
@@ -262,11 +289,12 @@ import {
         delBtn.onclick = () => {
             if (confirm(`Delete prompt "${prompt.title}"?`)) {
                 recordAnalytics('deleted');
-                loadPrompts(list => {
-                    const updated = list.filter(p => p.id !== prompt.id);
-                    savePrompts(updated);
-                    renderPromptList();
-                });
+                deletePrompt(prompt.promptId)
+                    .then(() => renderPromptList())
+                    .catch((err) => {
+                        console.warn('PromptMate: delete failed', err);
+                        alert('Failed to delete prompt. See console.');
+                    });
             }
         };
 
@@ -328,48 +356,43 @@ import {
     function openEditModal(prompt) {
         openPromptModal(true);
         const modal = document.getElementById('promptmate-modal');
-        modal.dataset.editId = prompt.id;
+        modal.dataset.editId = prompt.promptId;
         document.getElementById('pm-title').value = prompt.title;
-        document.getElementById('pm-prompt-body').value = prompt.promptBody;
-        document.getElementById('pm-tone').value = prompt.tone.option;
-        document.getElementById('pm-format').value = prompt.format.option;
+        document.getElementById('pm-prompt-body').value = prompt.body || '';
+        document.getElementById('pm-tone').value = prompt.tone?.option || '';
+        document.getElementById('pm-format').value = prompt.format?.option || '';
     }
 
     function onSavePrompt(modal) {
         const id = modal.dataset.editId;
         const title = document.getElementById('pm-title').value.trim();
-        const promptBody = document.getElementById('pm-prompt-body').value.trim();
+        const bodyText = document.getElementById('pm-prompt-body').value.trim();
         const toneOpt = TONE_OPTIONS.find(t => t.option === document.getElementById('pm-tone').value);
         const formatOpt = FORMAT_OPTIONS.find(f => f.option === document.getElementById('pm-format').value);
 
-        if (!title || !promptBody) {
+        if (!title || !bodyText) {
             alert('Please fill in all fields.');
             return;
         }
 
-        loadPrompts(list => {
-            if (id) {
-                const idx = list.findIndex(p => p.id === id);
-                if (idx !== -1) {
-                    list[idx] = { ...list[idx], title, promptBody, tone: toneOpt, format: formatOpt };
-                    recordAnalytics('edited');
-                }
-            } else {
-                const newPrompt = {
-                    id: crypto.randomUUID(),
-                    createdAt: new Date().toISOString(),
-                    title,
-                    promptBody,
-                    tone: toneOpt,
-                    format: formatOpt
-                };
-                list.push(newPrompt);
-                recordAnalytics('created');
-            }
-            savePrompts(list);
-            renderPromptList();
-            modal.remove();
-        });
+        if (id) recordAnalytics('edited');
+        else recordAnalytics('created');
+
+        savePrompt({
+            promptId: id || undefined,
+            title,
+            body: bodyText,
+            tone: toneOpt,
+            format: formatOpt,
+        })
+            .then(() => {
+                renderPromptList();
+                modal.remove();
+            })
+            .catch((err) => {
+                console.warn('PromptMate: save failed', err);
+                alert('Failed to save prompt. See console.');
+            });
     }
 
     function bootstrap() {

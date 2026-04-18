@@ -1,12 +1,17 @@
 /*
  * business.js
- * Business logic for PromptMate: storage, analytics, and prompt content building.
- * This module is reusable (e.g., for Claude integration).
+ * Source of truth is Drive. chrome.storage.local is a read-through cache + write queue.
  */
 
-export const STORAGE_KEY = 'promptmate_prompts';
+import * as drive from "./drive.js";
+import { DriveConflictError } from "./drive.js";
 
-// JSON definitions for Tone and Output Format
+export const CACHE_KEY = "promptmate_cache";
+// Legacy key from the pre-Drive layout; we wipe it on first load.
+const LEGACY_STORAGE_KEY = "promptmate_prompts";
+
+// ---- Tone & Format catalogue (unchanged) ----
+
 export const TONE_OPTIONS = [
     {
         option: 'Formal / Professional',
@@ -183,50 +188,461 @@ export const FORMAT_OPTIONS = [
     }
 ];
 
-/**
- * Load prompts from chrome.storage.local.
- * @param {function(Array)} callback
- */
-export function loadPrompts(callback) {
-    chrome.storage.local.get({ [STORAGE_KEY]: [] }, ({ [STORAGE_KEY]: prompts }) => {
-      callback(prompts);
-    });
-  }
+// ---- Cache helpers ----
 
-/**
- * Save prompts to chrome.storage.local.
- * @param {Array} prompts
- */
-export function savePrompts(prompts) {
-    chrome.storage.local.set({ [STORAGE_KEY]: prompts });
-  }
-/**
- * Record an analytics action.
- * @param {string} action - One of 'created','used','copied','edited','deleted'.
- */
-export function recordAnalytics(action) {
-    chrome.storage.local.get(['analytics'], result => {
-        const analytics = result.analytics || { created: 0, used: 0, copied: 0, edited: 0, deleted: 0 };
-        analytics[action] = (analytics[action] || 0) + 1;
-        chrome.storage.local.set({ analytics });
+const emptyCache = () => ({
+  prompts: {},
+  visibleFolderId: null,
+  lastSyncedAt: null,
+  pendingWrites: [],
+});
+
+function readCache() {
+  return new Promise((resolve) => {
+    chrome.storage.local.get({ [CACHE_KEY]: null }, (res) => {
+      resolve(res[CACHE_KEY] || emptyCache());
+    });
+  });
+}
+
+function writeCache(cache) {
+  return new Promise((resolve) => {
+    chrome.storage.local.set({ [CACHE_KEY]: cache }, () => resolve());
+  });
+}
+
+async function mutateCache(fn) {
+  const cache = await readCache();
+  const next = (await fn(cache)) || cache;
+  await writeCache(next);
+  return next;
+}
+
+export async function clearCache() {
+  return new Promise((resolve) => {
+    chrome.storage.local.remove(
+      [CACHE_KEY, LEGACY_STORAGE_KEY, "promptmate.visibleFolderId"],
+      () => resolve()
+    );
+  });
+}
+
+function generatePromptId() {
+  if (crypto?.randomUUID) return crypto.randomUUID();
+  return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+function isNetworkError(err) {
+  if (!err) return false;
+  if (err instanceof TypeError) return true;
+  if (err?.status === 0) return true;
+  const msg = err?.message || "";
+  return /failed to fetch|network|offline|ERR_INTERNET/i.test(msg);
+}
+
+function sortPromptsByCreation(entries) {
+  return entries.slice().sort((a, b) => {
+    const aTime = a.createdAt || "";
+    const bTime = b.createdAt || "";
+    if (aTime === bTime) return 0;
+    return aTime < bTime ? -1 : 1;
+  });
+}
+
+function promptsArray(cache) {
+  return sortPromptsByCreation(Object.values(cache.prompts || {}));
+}
+
+function metaFromCache(cache) {
+  return {
+    pendingCount: (cache.pendingWrites || []).length,
+    lastSyncedAt: cache.lastSyncedAt || null,
+  };
+}
+
+// ---- Listing + reconcile ----
+
+export function listPrompts(callback) {
+  if (typeof callback !== "function") callback = () => {};
+
+  readCache().then((cache) => {
+    callback(promptsArray(cache), { ...metaFromCache(cache), fromCache: true });
+  });
+
+  reconcileFromDrive()
+    .then((cache) => {
+      callback(promptsArray(cache), { ...metaFromCache(cache), fromCache: false });
+    })
+    .catch((err) => {
+      console.warn("PromptMate: background Drive sync failed", err);
     });
 }
 
-/**
- * Share analytics with the user.
- */
-export  function shareAnalytics() {
-    chrome.storage.local.get(['analytics'], (result) => {
-      const analytics = result.analytics || {
-        created: 0,
-        used: 0,
-        copied: 0,
-        edited: 0,
-        deleted: 0
-      };
-      const summary = `${analytics.created} prompts created, ${analytics.used} times used, ${analytics.edited} times edited, ${analytics.copied} times copied and ${analytics.deleted} times deleted`;
-      navigator.clipboard.writeText(summary).then(() => {
-        alert('Analytics copied to clipboard! \n' + summary);
-      });
-    });
+async function reconcileFromDrive() {
+  const [privateFiles, sharedFiles] = await Promise.all([
+    drive.listPrivatePrompts().catch((err) => {
+      throw err;
+    }),
+    drive.listVisiblePrompts().catch(() => []),
+  ]);
+
+  const seen = {};
+  const tag = (file, tier) => {
+    const m = file.name.match(/^PromptMate-(.+)\.json$/);
+    if (!m) return;
+    seen[m[1]] = { fileId: file.id, tier, modifiedTime: file.modifiedTime };
+  };
+  privateFiles.forEach((f) => tag(f, "private"));
+  // If a prompt has files in both tiers we favour the shared one — shared
+  // files overwrite private in `seen` because they come last.
+  sharedFiles.forEach((f) => tag(f, "shared"));
+
+  const cache = await readCache();
+  const nextPrompts = { ...(cache.prompts || {}) };
+
+  // Evict cache entries whose Drive file is gone.
+  for (const promptId of Object.keys(nextPrompts)) {
+    if (!seen[promptId]) delete nextPrompts[promptId];
   }
+
+  // Fetch content for new or changed entries.
+  for (const [promptId, meta] of Object.entries(seen)) {
+    const existing = nextPrompts[promptId];
+    const unchanged =
+      existing &&
+      existing.fileId === meta.fileId &&
+      existing.tier === meta.tier &&
+      existing.driveModifiedTime === meta.modifiedTime;
+    if (unchanged) continue;
+    try {
+      const { content, etag } = await drive.readPrompt(meta.fileId);
+      nextPrompts[promptId] = {
+        promptId,
+        title: content.title ?? "",
+        body: content.body ?? "",
+        tone: content.tone ?? null,
+        format: content.format ?? null,
+        createdAt: content.createdAt ?? new Date().toISOString(),
+        updatedAt: content.updatedAt ?? meta.modifiedTime ?? new Date().toISOString(),
+        fileId: meta.fileId,
+        etag,
+        tier: meta.tier,
+        driveModifiedTime: meta.modifiedTime || null,
+      };
+    } catch (err) {
+      console.warn("PromptMate: reconcile read failed", promptId, err);
+    }
+  }
+
+  const next = {
+    ...cache,
+    prompts: nextPrompts,
+    lastSyncedAt: new Date().toISOString(),
+  };
+  await writeCache(next);
+  return next;
+}
+
+// ---- Save / delete ----
+
+function toDrivePayload(prompt) {
+  return {
+    promptId: prompt.promptId,
+    title: prompt.title ?? "",
+    body: prompt.body ?? "",
+    tone: prompt.tone ?? "",
+    format: prompt.format ?? "",
+    createdAt: prompt.createdAt,
+  };
+}
+
+async function performCreate(prompt) {
+  return drive.createPrivatePrompt(toDrivePayload(prompt));
+}
+
+async function performUpdate(fileId, prompt, ifMatch) {
+  try {
+    return await drive.updatePrompt(fileId, toDrivePayload(prompt), { ifMatch });
+  } catch (err) {
+    if (err instanceof DriveConflictError) {
+      const { etag } = await drive.readPrompt(fileId);
+      return drive.updatePrompt(fileId, toDrivePayload(prompt), { ifMatch: etag });
+    }
+    throw err;
+  }
+}
+
+export async function savePrompt(input) {
+  const now = new Date().toISOString();
+  const cache = await readCache();
+  const existingId = input.promptId;
+  const existing = existingId ? cache.prompts[existingId] : null;
+  const promptId = existingId || generatePromptId();
+
+  const prompt = {
+    promptId,
+    title: input.title ?? "",
+    body: input.body ?? "",
+    tone: input.tone ?? null,
+    format: input.format ?? null,
+    createdAt: existing?.createdAt ?? input.createdAt ?? now,
+    updatedAt: now,
+  };
+
+  // Optimistic cache write.
+  const optimistic = {
+    ...prompt,
+    fileId: existing?.fileId ?? null,
+    etag: existing?.etag ?? null,
+    tier: existing?.tier ?? "private",
+    driveModifiedTime: existing?.driveModifiedTime ?? null,
+    pending: true,
+  };
+  await mutateCache((c) => {
+    c.prompts[promptId] = optimistic;
+    return c;
+  });
+
+  try {
+    let result;
+    if (existing?.fileId) {
+      result = await performUpdate(existing.fileId, prompt, existing.etag);
+    } else {
+      result = await performCreate(prompt);
+    }
+    await mutateCache((c) => {
+      c.prompts[promptId] = {
+        ...optimistic,
+        fileId: result.fileId,
+        etag: result.etag,
+        pending: false,
+      };
+      return c;
+    });
+    return promptId;
+  } catch (err) {
+    if (isNetworkError(err)) {
+      await queuePendingWrite({
+        op: existing?.fileId ? "update" : "create",
+        promptId,
+        payload: prompt,
+      });
+      return promptId;
+    }
+    // Hard failure — roll back optimistic insert if it was a brand-new prompt.
+    if (!existing) {
+      await mutateCache((c) => {
+        delete c.prompts[promptId];
+        return c;
+      });
+    }
+    throw err;
+  }
+}
+
+export async function deletePrompt(promptId) {
+  const cache = await readCache();
+  const entry = cache.prompts[promptId];
+  if (!entry) return;
+
+  await mutateCache((c) => {
+    delete c.prompts[promptId];
+    return c;
+  });
+
+  if (!entry.fileId) return;
+
+  try {
+    await drive.deletePrompt(entry.fileId);
+  } catch (err) {
+    if (isNetworkError(err)) {
+      await queuePendingWrite({ op: "delete", promptId, payload: { fileId: entry.fileId } });
+      return;
+    }
+    throw err;
+  }
+}
+
+// ---- Tier transitions (Task 07) ----
+
+async function requireCachedEntry(promptId) {
+  const cache = await readCache();
+  const entry = cache.prompts[promptId];
+  if (!entry || !entry.fileId) {
+    throw new Error(`PromptMate: no Drive file for prompt ${promptId}`);
+  }
+  return entry;
+}
+
+export async function publishPrompt(promptId) {
+  const entry = await requireCachedEntry(promptId);
+  const { newFileId, shareUrl } = await drive.publishPrompt(entry.fileId);
+  const { content, etag } = await drive.readPrompt(newFileId);
+  await mutateCache((c) => {
+    c.prompts[promptId] = {
+      ...c.prompts[promptId],
+      ...content,
+      promptId,
+      fileId: newFileId,
+      etag,
+      tier: "shared",
+      shareUrl,
+    };
+    return c;
+  });
+  return { shareUrl };
+}
+
+export async function unpublishPrompt(promptId) {
+  const entry = await requireCachedEntry(promptId);
+  await drive.unpublishPrompt(entry.fileId);
+  await mutateCache((c) => {
+    if (c.prompts[promptId]) delete c.prompts[promptId].shareUrl;
+    return c;
+  });
+  return { promptId };
+}
+
+export async function makePrivateAgain(promptId) {
+  const entry = await requireCachedEntry(promptId);
+  const { fileId, etag } = await drive.makePrivateAgain(entry.fileId);
+  await mutateCache((c) => {
+    c.prompts[promptId] = {
+      ...c.prompts[promptId],
+      fileId,
+      etag,
+      tier: "private",
+    };
+    delete c.prompts[promptId].shareUrl;
+    return c;
+  });
+  return { fileId };
+}
+
+export async function importSharedPrompt(externalFileId) {
+  const { fileId, etag } = await drive.importSharedPrompt(externalFileId);
+  const { content } = await drive.readPrompt(fileId);
+  const promptId = content.promptId || generatePromptId();
+  await mutateCache((c) => {
+    c.prompts[promptId] = {
+      promptId,
+      title: content.title ?? "",
+      body: content.body ?? "",
+      tone: content.tone ?? null,
+      format: content.format ?? null,
+      createdAt: content.createdAt ?? new Date().toISOString(),
+      updatedAt: content.updatedAt ?? new Date().toISOString(),
+      fileId,
+      etag,
+      tier: "private",
+      driveModifiedTime: null,
+    };
+    return c;
+  });
+  return { promptId };
+}
+
+// ---- Write queue ----
+
+async function queuePendingWrite(entry) {
+  await mutateCache((c) => {
+    c.pendingWrites = c.pendingWrites || [];
+    c.pendingWrites.push({ ...entry, queuedAt: new Date().toISOString() });
+    return c;
+  });
+}
+
+export async function getPendingCount() {
+  const cache = await readCache();
+  return (cache.pendingWrites || []).length;
+}
+
+export async function drainPendingWrites() {
+  const cache = await readCache();
+  const queue = cache.pendingWrites || [];
+  if (!queue.length) return { drained: 0, remaining: 0 };
+
+  const remaining = [];
+  let drained = 0;
+
+  for (const item of queue) {
+    try {
+      if (item.op === "create") {
+        const result = await performCreate(item.payload);
+        await mutateCache((c) => {
+          const ex = c.prompts[item.promptId];
+          if (ex) {
+            c.prompts[item.promptId] = {
+              ...ex,
+              fileId: result.fileId,
+              etag: result.etag,
+              pending: false,
+            };
+          }
+          return c;
+        });
+      } else if (item.op === "update") {
+        const ex = (await readCache()).prompts[item.promptId];
+        if (!ex?.fileId) {
+          // Nothing to update against — recreate.
+          const result = await performCreate(item.payload);
+          await mutateCache((c) => {
+            if (c.prompts[item.promptId]) {
+              c.prompts[item.promptId].fileId = result.fileId;
+              c.prompts[item.promptId].etag = result.etag;
+              c.prompts[item.promptId].pending = false;
+            }
+            return c;
+          });
+        } else {
+          const result = await performUpdate(ex.fileId, item.payload, ex.etag);
+          await mutateCache((c) => {
+            if (c.prompts[item.promptId]) {
+              c.prompts[item.promptId].fileId = result.fileId;
+              c.prompts[item.promptId].etag = result.etag;
+              c.prompts[item.promptId].pending = false;
+            }
+            return c;
+          });
+        }
+      } else if (item.op === "delete") {
+        if (item.payload?.fileId) await drive.deletePrompt(item.payload.fileId);
+      }
+      drained += 1;
+    } catch (err) {
+      if (isNetworkError(err)) {
+        remaining.push(item);
+      } else {
+        console.warn("PromptMate: dropping non-retryable pending write", item, err);
+      }
+    }
+  }
+
+  await mutateCache((c) => {
+    c.pendingWrites = remaining;
+    return c;
+  });
+  return { drained, remaining: remaining.length };
+}
+
+// ---- Analytics (device-local, unchanged) ----
+
+export function recordAnalytics(action) {
+  chrome.storage.local.get(['analytics'], result => {
+    const analytics = result.analytics || { created: 0, used: 0, copied: 0, edited: 0, deleted: 0 };
+    analytics[action] = (analytics[action] || 0) + 1;
+    chrome.storage.local.set({ analytics });
+  });
+}
+
+export function shareAnalytics() {
+  chrome.storage.local.get(['analytics'], (result) => {
+    const analytics = result.analytics || {
+      created: 0, used: 0, copied: 0, edited: 0, deleted: 0
+    };
+    const summary = `${analytics.created} prompts created, ${analytics.used} times used, ${analytics.edited} times edited, ${analytics.copied} times copied and ${analytics.deleted} times deleted`;
+    navigator.clipboard.writeText(summary).then(() => {
+      alert('Analytics copied to clipboard! \n' + summary);
+    });
+  });
+}

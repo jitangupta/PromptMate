@@ -1,4 +1,5 @@
 import { isSignedIn, signIn, signOut, getToken } from "./auth.js";
+import { clearCache } from "./business.js";
 
 const USERINFO_URL = "https://www.googleapis.com/oauth2/v2/userinfo";
 const EMAIL_CACHE_KEY = "promptmate.userEmail";
@@ -105,6 +106,9 @@ export async function performSignOut() {
     await signOut();
   } finally {
     await clearCachedEmail();
+    await clearCache().catch((err) =>
+      console.warn("PromptMate: failed to clear prompt cache on sign-out", err)
+    );
     state = { signedIn: false, email: null, message: null, loading: false };
     notify();
   }

@@ -1,8 +1,10 @@
 import {
   TONE_OPTIONS,
   FORMAT_OPTIONS,
-  loadPrompts,
-  savePrompts,
+  listPrompts,
+  savePrompt,
+  deletePrompt,
+  drainPendingWrites,
   recordAnalytics,
   shareAnalytics
 } from './business.js';
@@ -60,7 +62,12 @@ import {
       layout.style.marginRight = isOpen ? "260px" : "";
     }
 
-    if (isOpen) refreshAuthState();
+    if (isOpen) {
+      refreshAuthState();
+      drainPendingWrites().catch((err) =>
+        console.warn("PromptMate: drain pending writes failed", err)
+      );
+    }
   }
 
   // Create the sidebar (only once)
@@ -228,9 +235,8 @@ import {
 
     // PromptBody preview (14px)
     const bodyPreview = document.createElement('p');
-    const preview = prompt.promptBody.length > 30
-      ? prompt.promptBody.slice(0, 30) + '…'
-      : prompt.promptBody;
+    const body = prompt.body || '';
+    const preview = body.length > 30 ? body.slice(0, 30) + '…' : body;
     bodyPreview.textContent = preview;
     bodyPreview.className = 'text-sm text-gray-600'; // text-sm = 14px
     item.appendChild(bodyPreview);
@@ -250,7 +256,7 @@ import {
         // Build the full prompt content
         let content = '';
         // Main prompt body
-        content += `<p>${prompt.promptBody}</p>`;
+        content += `<p>${prompt.body || ''}</p>`;
         // Tone instruction
         if (prompt.tone) {
           content += `<p></p><p>${prompt.tone.instruction}</p>`;
@@ -285,7 +291,7 @@ import {
     copyBtn.className = 'btn-icon';
     copyBtn.addEventListener('click', () => {
       recordAnalytics('copied');
-      let text = prompt.promptBody;
+      let text = prompt.body || '';
       if (prompt.tone) {
         text += `\nTone (${prompt.tone.option}): ${prompt.tone.instruction}`;
       }
@@ -318,11 +324,12 @@ import {
       e.stopPropagation();
       if (confirm('Are you sure you want to delete "' + prompt.title + '" prompt?')) {
         recordAnalytics('deleted');
-        loadPrompts(list => {
-          const newList = list.filter(p => p.id !== prompt.id);
-          savePrompts(newList);
-          renderPromptList();
-        });
+        deletePrompt(prompt.promptId)
+          .then(() => renderPromptList())
+          .catch((err) => {
+            console.warn('PromptMate: delete failed', err);
+            alert('Failed to delete prompt. See console.');
+          });
       }
     });
 
@@ -436,30 +443,29 @@ import {
     document.getElementById('pm-tone').value = '';
     document.getElementById('pm-format').value = '';
 
-    loadPrompts(list => {
-      if (editId) {
-        const idx = list.findIndex(p => p.id === editId);
-        list[idx] = { ...list[idx], title, promptBody: bodyText, tone: toneOption, format: formatOption };
-        delete modal.dataset.editPromptId;
-        recordAnalytics('edited');
-      } else {
-        const newPrompt = {
-          id: crypto.randomUUID(),
-          createdAt: new Date().toISOString(),
-          title,
-          promptBody: bodyText,
-          tone: toneOption,
-          format: formatOption
-        };
-        list.push(newPrompt);
-        recordAnalytics('created');
-      }
-      savePrompts(list);
-      closePromptModal();
-      renderPromptList();
-    });
+    const payload = {
+      promptId: editId || undefined,
+      title,
+      body: bodyText,
+      tone: toneOption,
+      format: formatOption,
+    };
+    if (editId) {
+      delete modal.dataset.editPromptId;
+      recordAnalytics('edited');
+    } else {
+      recordAnalytics('created');
+    }
 
-
+    savePrompt(payload)
+      .then(() => {
+        closePromptModal();
+        renderPromptList();
+      })
+      .catch((err) => {
+        console.warn('PromptMate: save failed', err);
+        alert('Failed to save prompt. See console.');
+      });
   }
 
   function openEditModal(prompt) {
@@ -468,10 +474,10 @@ import {
 
     const modal = document.querySelector('[data-testid="promptmate-modal"]');
     document.getElementById('pm-title').value = prompt.title;
-    document.getElementById('pm-prompt-body').value = prompt.promptBody;
-    document.getElementById('pm-tone').value = prompt.tone.option;
-    document.getElementById('pm-format').value = prompt.format.option;
-    modal.dataset.editPromptId = prompt.id;
+    document.getElementById('pm-prompt-body').value = prompt.body || '';
+    document.getElementById('pm-tone').value = prompt.tone?.option || '';
+    document.getElementById('pm-format').value = prompt.format?.option || '';
+    modal.dataset.editPromptId = prompt.promptId;
     modal.classList.remove('hidden');
   }
 
@@ -480,10 +486,30 @@ import {
     if (!listEl) listEl = document.getElementById('promptmate-list');
     if (!listEl) return;
 
-    listEl.innerHTML = '';
-    loadPrompts(prompts => {
+    listPrompts((prompts, meta) => {
+      listEl.innerHTML = '';
       prompts.forEach(p => listEl.appendChild(createPromptItem(p)));
+      updateSyncIndicator(meta);
     });
+  }
+
+  function updateSyncIndicator(meta) {
+    const footer = document.getElementById('promptmate-footer');
+    if (!footer) return;
+    let indicator = footer.querySelector('#promptmate-sync-status');
+    if (!indicator) {
+      indicator = document.createElement('div');
+      indicator.id = 'promptmate-sync-status';
+      indicator.style.cssText = 'font-size:11px;color:#888;padding:0 1rem 0.5rem;';
+      footer.prepend(indicator);
+    }
+    if (meta?.pendingCount > 0) {
+      indicator.textContent = `${meta.pendingCount} change${meta.pendingCount > 1 ? 's' : ''} pending sync…`;
+    } else if (meta?.fromCache) {
+      indicator.textContent = 'Syncing…';
+    } else {
+      indicator.textContent = '';
+    }
   }
 
 
