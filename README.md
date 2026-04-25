@@ -1,6 +1,16 @@
-# PromptMate
+<p align="center">
+  <img src="assets/logo.png" alt="PromptMate" width="280" />
+</p>
 
-Your prompts. One click away.
+<h1 align="center">PromptMate</h1>
+
+<p align="center">Your prompts. One click away.</p>
+
+<p align="center">
+  <a href="https://chromewebstore.google.com/detail/oknglgpcglngpaobpjndcaaljdchmgai">
+    <img src="https://img.shields.io/badge/Chrome%20Web%20Store-Install-4285F4?logo=googlechrome&logoColor=white" alt="Install from Chrome Web Store" />
+  </a>
+</p>
 
 PromptMate is a Chrome extension that injects a prompt-management sidebar into [ChatGPT](https://chatgpt.com) and [Claude](https://claude.ai). Compose prompts from a reusable body plus selectable **Tone** and **Output Format** presets, then insert them into the host chat with a single click.
 
@@ -33,7 +43,7 @@ The extension appears on `chatgpt.com` and `claude.ai` as a **PromptMate** butto
 
 ### From Chrome Web Store
 
-Coming soon.
+Install from the [Chrome Web Store listing](https://chromewebstore.google.com/detail/oknglgpcglngpaobpjndcaaljdchmgai).
 
 ## Privacy
 
