@@ -10,6 +10,7 @@ import {
   recordAnalytics,
   getComposePrefs,
   setComposePrefs,
+  setPromptPinned,
 } from "./business.js";
 
 import {
@@ -27,6 +28,21 @@ import {
   let composePrefs = { tone: null, format: null };
   getComposePrefs().then((p) => {
     composePrefs = p;
+  });
+
+  let lastPrompts = [];
+  let lastMeta = null;
+  let currentQuery = "";
+
+  document.addEventListener("keydown", (e) => {
+    if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== "k") return;
+    const sb = document.getElementById(SIDEBAR_ID);
+    if (!sb || !sb.classList.contains("pm-open")) return;
+    const input = sb.querySelector(".pm-search-input");
+    if (!input) return;
+    e.preventDefault();
+    input.focus();
+    input.select();
   });
 
   // ────────────────────────────────────────────────────────────
@@ -126,7 +142,6 @@ import {
 
     sb.appendChild(buildSearch());
     sb.appendChild(buildComposeDisclosure());
-    sb.appendChild(buildSectionLabel("Recent"));
 
     const list = document.createElement("div");
     list.className = "pm-list";
@@ -134,7 +149,7 @@ import {
     sb.appendChild(list);
 
     sb.appendChild(buildFooter(authState));
-    renderPromptList(list);
+    refreshPromptData();
   }
 
   function buildHeader() {
@@ -160,17 +175,16 @@ import {
       <span class="pm-search-icon">
         <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="6" cy="6" r="4"/><path d="M9.5 9.5L12 12"/></svg>
       </span>
-      <input class="pm-search-input" type="search" placeholder="Search prompts…" disabled />
+      <input class="pm-search-input" type="search" placeholder="Search prompts…" />
       <span class="pm-kbd pm-mono">⌘K</span>
     `;
+    const input = wrap.querySelector(".pm-search-input");
+    input.value = currentQuery;
+    input.addEventListener("input", () => {
+      currentQuery = input.value;
+      paintList();
+    });
     return wrap;
-  }
-
-  function buildSectionLabel(text) {
-    const el = document.createElement("div");
-    el.className = "pm-section-label";
-    el.textContent = text;
-    return el;
   }
 
   function buildComposeDisclosure() {
@@ -320,22 +334,83 @@ import {
   // ────────────────────────────────────────────────────────────
   // Prompt list + cards
   // ────────────────────────────────────────────────────────────
-  function renderPromptList(listEl) {
-    if (!listEl) listEl = document.getElementById("pm-list");
-    if (!listEl) return;
-
+  function refreshPromptData() {
     listPrompts((prompts, meta) => {
-      listEl.innerHTML = "";
-      if (!prompts.length) {
+      lastPrompts = prompts;
+      lastMeta = meta;
+      paintList();
+    });
+  }
+
+  function sortByRecency(arr) {
+    return arr.slice().sort((a, b) => {
+      const ax = a.updatedAt || a.createdAt || "";
+      const bx = b.updatedAt || b.createdAt || "";
+      return ax < bx ? 1 : ax > bx ? -1 : 0;
+    });
+  }
+
+  function paintList() {
+    const listEl = document.getElementById("pm-list");
+    if (!listEl) return;
+    listEl.innerHTML = "";
+
+    const meta = lastMeta;
+    const prompts = lastPrompts;
+
+    if (!prompts.length) {
+      const empty = document.createElement("div");
+      empty.className = "pm-empty";
+      empty.textContent = "No prompts yet. Click “New prompt” below to create one.";
+      listEl.appendChild(empty);
+      updateSyncIndicator(meta);
+      return;
+    }
+
+    const q = currentQuery.trim().toLowerCase();
+    if (q) {
+      const matches = prompts.filter(
+        (p) =>
+          (p.title || "").toLowerCase().includes(q) ||
+          (p.body || "").toLowerCase().includes(q)
+      );
+      const label = document.createElement("div");
+      label.className = "pm-section-label";
+      label.textContent = `${matches.length} result${matches.length === 1 ? "" : "s"} for “${currentQuery.trim()}”`;
+      listEl.appendChild(label);
+      if (!matches.length) {
         const empty = document.createElement("div");
         empty.className = "pm-empty";
-        empty.textContent = "No prompts yet. Click “New prompt” below to create one.";
+        empty.textContent = `No prompts match “${currentQuery.trim()}”.`;
         listEl.appendChild(empty);
       } else {
-        prompts.forEach((p) => listEl.appendChild(buildCard(p)));
+        sortByRecency(matches).forEach((p) => listEl.appendChild(buildCard(p)));
       }
       updateSyncIndicator(meta);
-    });
+      return;
+    }
+
+    const sorted = sortByRecency(prompts);
+    const pinned = sorted.filter((p) => p.pinned);
+    const recent = sorted.filter((p) => !p.pinned);
+
+    if (pinned.length) {
+      const lbl = document.createElement("div");
+      lbl.className = "pm-section-label";
+      lbl.textContent = "Pinned";
+      listEl.appendChild(lbl);
+      pinned.forEach((p) => listEl.appendChild(buildCard(p)));
+    }
+
+    if (recent.length) {
+      const lbl = document.createElement("div");
+      lbl.className = "pm-section-label";
+      lbl.textContent = "Recent";
+      listEl.appendChild(lbl);
+      recent.forEach((p) => listEl.appendChild(buildCard(p)));
+    }
+
+    updateSyncIndicator(meta);
   }
 
   function buildCard(prompt) {
@@ -401,6 +476,16 @@ import {
     const menu = document.createElement("div");
     menu.className = "pm-menu";
 
+    const pin = document.createElement("button");
+    pin.className = "pm-menu-item";
+    pin.type = "button";
+    pin.textContent = prompt.pinned ? "Unpin" : "Pin";
+    pin.addEventListener("click", (e) => {
+      e.stopPropagation();
+      menu.classList.remove("open");
+      onTogglePin(prompt);
+    });
+
     const copy = document.createElement("button");
     copy.className = "pm-menu-item";
     copy.type = "button";
@@ -431,7 +516,7 @@ import {
       onDelete(prompt);
     });
 
-    menu.append(copy, edit, del);
+    menu.append(pin, copy, edit, del);
 
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
@@ -521,11 +606,17 @@ import {
     navigator.clipboard.writeText(composePromptText(prompt)).catch(() => {});
   }
 
+  function onTogglePin(prompt) {
+    setPromptPinned(prompt.promptId, !prompt.pinned)
+      .then(() => refreshPromptData())
+      .catch((err) => console.warn("PromptMate: pin toggle failed", err));
+  }
+
   function onDelete(prompt) {
     if (!confirm(`Delete "${prompt.title}"?`)) return;
     recordAnalytics("deleted");
     deletePrompt(prompt.promptId)
-      .then(() => renderPromptList())
+      .then(() => refreshPromptData())
       .catch((err) => {
         console.warn("PromptMate: delete failed", err);
         alert("Failed to delete prompt. See console.");
@@ -625,7 +716,7 @@ import {
     })
       .then(() => {
         closePromptModal();
-        renderPromptList();
+        refreshPromptData();
       })
       .catch((err) => {
         console.warn("PromptMate: save failed", err);

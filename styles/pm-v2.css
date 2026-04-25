@@ -258,6 +258,17 @@
   font-family: ui-monospace, SFMono-Regular, "Menlo", "Consolas", monospace;
 }
 
+/* When the label sits inside the list, the list already provides horizontal
+ * padding — drop the label's own to avoid doubling up. Successive labels get
+ * a little breathing room from the cards above. */
+.pm-list .pm-section-label {
+  padding: 0 0 6px;
+}
+
+.pm-list .pm-section-label:not(:first-child) {
+  padding-top: 12px;
+}
+
 /* ── List ──────────────────────────────────────────────────── */
 .pm-list {
   flex: 1;
