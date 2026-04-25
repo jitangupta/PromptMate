@@ -641,6 +641,81 @@
   box-shadow: 0 0 0 3px oklch(72% 0.16 152 / 0.18);
 }
 
+/* ── Trigger pill ──────────────────────────────────────────── */
+/* Lives outside .pm-sidebar (body-appended), so it carries its own
+ * adaptive palette. On dark hosts: light pill. On light hosts: dark pill.
+ * The host's prefers-color-scheme is the same signal we use for the panel,
+ * so the pill always reads against whatever surface it sits on. */
+.pm-pill {
+  --pp-bg: oklch(96% 0.005 95);
+  --pp-fg: oklch(20% 0.01 150);
+  --pp-kbd-bg: oklch(20% 0.01 150 / 0.08);
+  --pp-ring: 0 0 0 1px oklch(96% 0.005 95 / 0.15),
+    0 8px 24px oklch(0% 0 0 / 0.3);
+
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 9998;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px 8px 10px;
+  border-radius: 999px;
+  background: var(--pp-bg);
+  color: var(--pp-fg);
+  box-shadow: var(--pp-ring);
+  border: none;
+  cursor: pointer;
+  user-select: none;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue",
+    system-ui, sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+
+.pm-pill:hover {
+  transform: translateY(-1px);
+}
+
+@media (prefers-color-scheme: light) {
+  .pm-pill {
+    --pp-bg: oklch(20% 0.01 150);
+    --pp-fg: oklch(96% 0.005 95);
+    --pp-kbd-bg: oklch(96% 0.005 95 / 0.12);
+    --pp-ring: 0 0 0 1px oklch(20% 0.01 150 / 0.08),
+      0 8px 24px oklch(0% 0 0 / 0.08);
+  }
+}
+
+.pm-pill-logo {
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
+  background: oklch(72% 0.16 152);
+  color: oklch(16% 0.01 150);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.pm-pill-kbd {
+  font-size: 10px;
+  opacity: 0.6;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--pp-kbd-bg);
+  margin-left: 2px;
+  font-family: ui-monospace, SFMono-Regular, "Menlo", "Consolas", monospace;
+}
+
+.pm-pill.pm-hidden {
+  display: none;
+}
+
 /* ── Scrollbars (subtle, host-agnostic) ────────────────────── */
 .pm-list::-webkit-scrollbar,
 .pm-modal-body::-webkit-scrollbar {
