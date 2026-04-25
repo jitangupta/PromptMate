@@ -108,9 +108,10 @@ import {
   }
 
   function createSidebar() {
-    const layout = document.querySelector(LAYOUT_SELECTOR);
-    if (!layout) return null;
-
+    // Mount on document.body so position:fixed is viewport-relative. Mounting
+    // inside the host's tree breaks containment whenever an ancestor has a
+    // `transform`, `filter`, or `perspective` applied — fixed elements become
+    // relative to that ancestor, which is why heights differed between hosts.
     const sb = document.createElement("aside");
     sb.id = SIDEBAR_ID;
     sb.className = "pm-sidebar";
@@ -123,7 +124,7 @@ import {
       transition: right 0.3s ease-in-out;
     `;
 
-    layout.appendChild(sb);
+    document.body.appendChild(sb);
 
     subscribeAuthState((state) => renderSidebar(sb, state));
     refreshAuthState();

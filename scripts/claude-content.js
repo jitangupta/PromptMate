@@ -101,9 +101,10 @@ import {
   }
 
   function createSidebar() {
-    const container = document.querySelector("div#root>div>div>div") || document.body;
-    if (!container) return null;
-
+    // Mount on document.body so position:fixed is viewport-relative. Inside
+    // Claude's React tree, a transformed ancestor would otherwise become the
+    // containing block — that's what was making the panel render at a
+    // different height than ChatGPT's.
     const sb = document.createElement("aside");
     sb.id = SIDEBAR_ID;
     sb.className = "pm-sidebar";
@@ -116,7 +117,7 @@ import {
       transition: right 0.3s ease-in-out;
     `;
 
-    container.appendChild(sb);
+    document.body.appendChild(sb);
 
     subscribeAuthState((state) => renderSidebar(sb, state));
     refreshAuthState();

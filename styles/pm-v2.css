@@ -26,8 +26,15 @@
   --pm-overlay: oklch(0% 0 0 / 0.55);
   --pm-shadow: 0 1px 2px oklch(0% 0 0 / 0.1), 0 12px 40px oklch(0% 0 0 / 0.25);
 
-  width: 380px;
+  /* Lock width: Claude's host stylesheet has high-specificity rules that
+   * otherwise leak in and stretch the panel. !important here is defensive,
+   * not stylistic — both hosts must render the panel at exactly 380px. */
+  width: 380px !important;
+  min-width: 380px;
+  max-width: 380px;
   height: 100%;
+  margin: 0 !important;
+  padding: 0 !important;
   display: flex;
   flex-direction: column;
   background: var(--pm-bg);
@@ -125,7 +132,7 @@
 }
 
 /* ── Search ─────────────────────────────────────────────────── */
-.pm-search {
+.pm-sidebar .pm-search {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -135,6 +142,7 @@
   border: 1px solid var(--pm-border);
   border-radius: 10px;
   transition: border-color 0.12s, box-shadow 0.12s;
+  box-sizing: border-box;
 }
 
 .pm-search:focus-within {
