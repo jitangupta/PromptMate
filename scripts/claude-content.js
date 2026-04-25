@@ -11,6 +11,7 @@ import {
   getComposePrefs,
   setComposePrefs,
   setPromptPinned,
+  incrementPromptUsed,
 } from "./business.js";
 
 import {
@@ -599,11 +600,19 @@ import {
   }
 
   function onUse(prompt) {
-    recordAnalytics("used");
     const text = composePromptText(prompt);
     if (!insertIntoClaudeInput(text)) {
       console.warn("PromptMate: could not locate Claude input field");
+      return;
     }
+    // Only count a real Use — i.e., the host accepted the insert. Bumping
+    // updatedAt via savePrompt also floats the prompt to the top of Recent.
+    recordAnalytics("used");
+    incrementPromptUsed(prompt.promptId)
+      .then(() => refreshPromptData())
+      .catch((err) =>
+        console.warn("PromptMate: increment used failed", err)
+      );
   }
 
   function onCopy(prompt) {

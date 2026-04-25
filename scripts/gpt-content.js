@@ -8,7 +8,10 @@ import {
   deletePrompt,
   drainPendingWrites,
   recordAnalytics,
+  getComposePrefs,
+  setComposePrefs,
   setPromptPinned,
+  incrementPromptUsed,
 } from "./business.js";
 
 import {
@@ -23,6 +26,13 @@ import {
   const PILL_ID = "promptmate-pill";
   const LAYOUT_SELECTOR = "div.relative.flex.w-full";
   const SIDEBAR_WIDTH = 380;
+
+  // Session-level compose prefs (Tone/Format from the disclosure). Cached in
+  // memory so Use clicks don't await chrome.storage on every fire.
+  let composePrefs = { tone: null, format: null };
+  getComposePrefs().then((p) => {
+    composePrefs = p;
+  });
 
   // Cached prompt fetch + search state. Keystrokes paint from the cache so
   // each character doesn't kick off a Drive sync.
@@ -553,43 +563,101 @@ import {
   }
 
   // ────────────────────────────────────────────────────────────
-  // Actions
+  // Compose + Use
+  //
+  // ChatGPT switched its composer to a ProseMirror contenteditable. Setting
+  // innerHTML on it pastes content visually but React never sees a "typed"
+  // change, so the send button stays disabled. Dispatching a synthetic paste
+  // with a DataTransfer is what ProseMirror actually listens to. Same trick
+  // Claude needs.
   // ────────────────────────────────────────────────────────────
-  function composeText(prompt) {
-    const tone = TONE_OPTIONS.find((t) => t.option === composePrefs.tone) || prompt.tone;
-    const format = FORMAT_OPTIONS.find((f) => f.option === composePrefs.format) || prompt.format;
-    let html = `<p>${escapeText(prompt.body || "")}</p>`;
-    if (tone?.instruction) html += `<p></p><p>${escapeText(tone.instruction)}</p>`;
-    if (format?.instruction) html += `<p></p><p>${escapeText(format.instruction)}</p>`;
-    return html;
+  function findChatGPTInput() {
+    return (
+      document.querySelector('div.ProseMirror[contenteditable="true"]') ||
+      document.querySelector('[contenteditable="true"]#prompt-textarea') ||
+      document.getElementById("prompt-textarea") ||
+      document.querySelector('textarea[name="prompt-textarea"]')
+    );
   }
 
-  function composePlainText(prompt) {
+  function composePromptText(prompt) {
     const tone = TONE_OPTIONS.find((t) => t.option === composePrefs.tone) || prompt.tone;
     const format = FORMAT_OPTIONS.find((f) => f.option === composePrefs.format) || prompt.format;
-    let text = prompt.body || "";
-    if (tone) text += `\nTone (${tone.option}): ${tone.instruction}`;
-    if (format) text += `\nFormat (${format.option}): ${format.instruction}`;
-    return text;
+    const parts = [prompt.body || ""];
+    if (tone?.instruction) parts.push("", tone.instruction);
+    if (format?.instruction) parts.push(format.instruction);
+    return parts.join("\n");
   }
 
-  function onUse(prompt) {
-    recordAnalytics("used");
-    const textarea = document.getElementById("prompt-textarea");
-    if (!textarea) return;
-    textarea.innerHTML = composeText(prompt);
-    textarea.focus();
+  function selectAllContent(el) {
     const range = document.createRange();
+    range.selectNodeContents(el);
     const sel = window.getSelection();
-    range.selectNodeContents(textarea);
-    range.collapse(false);
     sel.removeAllRanges();
     sel.addRange(range);
   }
 
+  function insertIntoChatGPTInput(text) {
+    const el = findChatGPTInput();
+    if (!el) return false;
+
+    el.focus();
+
+    // Real <textarea> fallback — set value and fire input so React's
+    // onChange handlers see it. Modern ChatGPT doesn't render this, but
+    // a future revert wouldn't break us.
+    if (el.tagName === "TEXTAREA") {
+      const setter = Object.getOwnPropertyDescriptor(
+        window.HTMLTextAreaElement.prototype,
+        "value"
+      ).set;
+      setter.call(el, text);
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+      return true;
+    }
+
+    // contenteditable / ProseMirror — paste-event pattern.
+    selectAllContent(el);
+    try {
+      const dt = new DataTransfer();
+      dt.setData("text/plain", text);
+      const pasted = el.dispatchEvent(
+        new ClipboardEvent("paste", {
+          clipboardData: dt,
+          bubbles: true,
+          cancelable: true,
+        })
+      );
+      if (pasted) return true;
+    } catch (err) {
+      console.warn("PromptMate: paste event failed, falling back to execCommand", err);
+    }
+
+    try {
+      return document.execCommand("insertText", false, text);
+    } catch (err) {
+      console.warn("PromptMate: execCommand insertText failed", err);
+      return false;
+    }
+  }
+
+  function onUse(prompt) {
+    const text = composePromptText(prompt);
+    if (!insertIntoChatGPTInput(text)) {
+      console.warn("PromptMate: could not locate ChatGPT input field");
+      return;
+    }
+    recordAnalytics("used");
+    incrementPromptUsed(prompt.promptId)
+      .then(() => refreshPromptData())
+      .catch((err) =>
+        console.warn("PromptMate: increment used failed", err)
+      );
+  }
+
   function onCopy(prompt) {
     recordAnalytics("copied");
-    navigator.clipboard.writeText(composePlainText(prompt)).catch(() => {});
+    navigator.clipboard.writeText(composePromptText(prompt)).catch(() => {});
   }
 
   function onTogglePin(prompt) {
