@@ -1,3 +1,5 @@
+import "../styles/pm-v2.css";
+
 import {
   TONE_OPTIONS,
   FORMAT_OPTIONS,
@@ -6,29 +8,33 @@ import {
   deletePrompt,
   drainPendingWrites,
   recordAnalytics,
-  shareAnalytics
-} from './business.js';
-
-import {
-  makeInputField,
-  makeSelectField,
-  makeSignInButton,
-  makeAuthFooter,
-} from './utility.js';
+  getComposePrefs,
+  setComposePrefs,
+} from "./business.js";
 
 import {
   subscribeAuthState,
   refreshAuthState,
   performSignIn,
   performSignOut,
-} from './sidebar-auth.js';
+} from "./sidebar-auth.js";
 
 (function initPromptMateIntegration() {
   const BUTTON_ID = "promptmate-btn";
   const SIDEBAR_ID = "promptmate-sidebar";
   const LAYOUT_SELECTOR = "div.relative.flex.w-full";
+  const SIDEBAR_WIDTH = 380;
 
-  // Create or re-create the header button
+  // Session-level compose prefs cache so the UI doesn't have to await
+  // chrome.storage on every Use click.
+  let composePrefs = { tone: null, format: null };
+  getComposePrefs().then((p) => {
+    composePrefs = p;
+  });
+
+  // ────────────────────────────────────────────────────────────
+  // Header button (unchanged from v1 — will coexist with the pill in stage 3)
+  // ────────────────────────────────────────────────────────────
   function createPromptMateButton() {
     if (document.getElementById(BUTTON_ID)) return;
     const container = document.getElementById("conversation-header-actions");
@@ -41,7 +47,7 @@ import {
     btn.setAttribute("data-testid", "promptmate-button");
     btn.innerHTML = `
       <div class="flex w-full items-center justify-center gap-1.5">
-        <svg hight="20" width="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><g id="SVGRepo_bgCarrier" stroke-width="0"></g><g id="SVGRepo_tracerCarrier" stroke-linecap="round" stroke-linejoin="round"></g><g id="SVGRepo_iconCarrier"> <path d="M18.18 8.03933L18.6435 7.57589C19.4113 6.80804 20.6563 6.80804 21.4241 7.57589C22.192 8.34374 22.192 9.58868 21.4241 10.3565L20.9607 10.82M18.18 8.03933C18.18 8.03933 18.238 9.02414 19.1069 9.89309C19.9759 10.762 20.9607 10.82 20.9607 10.82M18.18 8.03933L13.9194 12.2999C13.6308 12.5885 13.4865 12.7328 13.3624 12.8919C13.2161 13.0796 13.0906 13.2827 12.9882 13.4975C12.9014 13.6797 12.8368 13.8732 12.7078 14.2604L12.2946 15.5L12.1609 15.901M20.9607 10.82L16.7001 15.0806C16.4115 15.3692 16.2672 15.5135 16.1081 15.6376C15.9204 15.7839 15.7173 15.9094 15.5025 16.0118C15.3203 16.0986 15.1268 16.1632 14.7396 16.2922L13.5 16.7054L13.099 16.8391M13.099 16.8391L12.6979 16.9728C12.5074 17.0363 12.2973 16.9867 12.1553 16.8447C12.0133 16.7027 11.9637 16.4926 12.0272 16.3021L12.1609 15.901M13.099 16.8391L12.1609 15.901" stroke="#ffffff" stroke-width="1.5"></path> <path d="M8 13H10.5" stroke="#ffffff" stroke-width="1.5" stroke-linecap="round"></path> <path d="M8 9H14.5" stroke="#ffffff" stroke-width="1.5" stroke-linecap="round"></path> <path d="M8 17H9.5" stroke="#ffffff" stroke-width="1.5" stroke-linecap="round"></path> <path d="M19.8284 3.17157C18.6569 2 16.7712 2 13 2H11C7.22876 2 5.34315 2 4.17157 3.17157C3 4.34315 3 6.22876 3 10V14C3 17.7712 3 19.6569 4.17157 20.8284C5.34315 22 7.22876 22 11 22H13C16.7712 22 18.6569 22 19.8284 20.8284C20.7715 19.8853 20.9554 18.4796 20.9913 16" stroke="#ffffff" stroke-width="1.5" stroke-linecap="round"></path> </g></svg>
+        <svg height="20" width="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><g><path d="M18.18 8.03933L18.6435 7.57589C19.4113 6.80804 20.6563 6.80804 21.4241 7.57589C22.192 8.34374 22.192 9.58868 21.4241 10.3565L20.9607 10.82M18.18 8.03933C18.18 8.03933 18.238 9.02414 19.1069 9.89309C19.9759 10.762 20.9607 10.82 20.9607 10.82M18.18 8.03933L13.9194 12.2999C13.6308 12.5885 13.4865 12.7328 13.3624 12.8919C13.2161 13.0796 13.0906 13.2827 12.9882 13.4975C12.9014 13.6797 12.8368 13.8732 12.7078 14.2604L12.2946 15.5L12.1609 15.901M20.9607 10.82L16.7001 15.0806C16.4115 15.3692 16.2672 15.5135 16.1081 15.6376C15.9204 15.7839 15.7173 15.9094 15.5025 16.0118C15.3203 16.0986 15.1268 16.1632 14.7396 16.2922L13.5 16.7054L13.099 16.8391M13.099 16.8391L12.6979 16.9728C12.5074 17.0363 12.2973 16.9867 12.1553 16.8447C12.0133 16.7027 11.9637 16.4926 12.0272 16.3021L12.1609 15.901M13.099 16.8391L12.1609 15.901" stroke="currentColor" stroke-width="1.5"/><path d="M8 13H10.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M8 9H14.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M8 17H9.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M19.8284 3.17157C18.6569 2 16.7712 2 13 2H11C7.22876 2 5.34315 2 4.17157 3.17157C3 4.34315 3 6.22876 3 10V14C3 17.7712 3 19.6569 4.17157 20.8284C5.34315 22 7.22876 22 11 22H13C16.7712 22 18.6569 22 19.8284 20.8284C20.7715 19.8853 20.9554 18.4796 20.9913 16" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></g></svg>
         PromptMate
       </div>
     `;
@@ -49,17 +55,22 @@ import {
     container.appendChild(btn);
   }
 
-  // Toggle sidebar visibility & layout shift
+  // ────────────────────────────────────────────────────────────
+  // Sidebar shell
+  // ────────────────────────────────────────────────────────────
   function toggleSidebar() {
     let sb = document.getElementById(SIDEBAR_ID);
     if (!sb) sb = createSidebar();
+    if (!sb) return;
 
     const layout = document.querySelector(LAYOUT_SELECTOR);
-    const isOpen = sb.classList.toggle("show");
+    const isOpen = sb.classList.toggle("pm-open");
+
+    sb.style.right = isOpen ? "0" : `-${SIDEBAR_WIDTH}px`;
 
     if (layout) {
       layout.style.transition = "margin-right 0.3s ease";
-      layout.style.marginRight = isOpen ? "260px" : "";
+      layout.style.marginRight = isOpen ? `${SIDEBAR_WIDTH}px` : "";
     }
 
     if (isOpen) {
@@ -70,450 +81,591 @@ import {
     }
   }
 
-  // Create the sidebar (only once)
   function createSidebar() {
     const layout = document.querySelector(LAYOUT_SELECTOR);
-    if (!layout) return;
+    if (!layout) return null;
 
-    const sb = document.createElement("div");
+    const sb = document.createElement("aside");
     sb.id = SIDEBAR_ID;
-    sb.innerHTML = `
-          <style>
-            /* Sidebar container */
-            #${SIDEBAR_ID} {
-              width: 260px;
-              height: 100%;
-              position: fixed;
-              top: 0;
-              right: -260px;
-              background: var(--token-sidebar-surface-primary, #1e1e1e);
-              z-index: 9999;
-              transition: right 0.3s ease-in-out;
-              box-shadow: -2px 0 5px rgba(0,0,0,0.3);
-              display: flex;
-              flex-direction: column;
-              color: #fff;
-            }
-            /* When open */
-            #${SIDEBAR_ID}.show {
-              right: 0;
-            }
-            /* Header with close button */
-            #promptmate-header {
-              display: flex;
-              justify-content: space-between;
-              align-items: center;
-              padding: 1rem;
-              font-weight: bold;
-              font-size: 16px;
-              border-bottom: 1px solid rgba(255,255,255,0.1);
-            }
-            #promptmate-header .close-btn {
-              background: none;
-              border: none;
-              font-size: 18px;
-              color: #bbb;
-              cursor: pointer;
-            }
-            #promptmate-header .close-btn:hover {
-              color: #fff;
-            }
-            /* Prompt list */
-            #promptmate-list {
-              flex: 1;
-              overflow-y: auto;
-              padding: 0.75rem;
-            }
-            .prompt-item {
-              background: #2c2c2c;
-              margin-bottom: 0.5rem;
-              padding: 0.5rem;
-              border-radius: 6px;
-              cursor: pointer;
-            }
-            .prompt-item:hover {
-              background: #3a3a3a;
-            }
-            /* Add button */
-            #add-prompt-btn {
-              margin: 0.75rem;
-              padding: 0.5rem;
-              background: #4caf50;
-              color: white;
-              border: none;
-              border-radius: 5px;
-              cursor: pointer;
-            }
-            #add-prompt-btn:hover {
-              background: #45a045;
-            }
-          </style>
-          <div id="promptmate-header">
-            PromptMate
-            <button class="close-btn" aria-label="Close">&times;</button>
-          </div>
-          <div id="promptmate-body" style="flex:1;display:flex;flex-direction:column;overflow:hidden;"></div>
-          <div id="promptmate-footer"></div>
-        `;
-
-    sb.querySelector(".close-btn").addEventListener("click", toggleSidebar);
+    sb.className = "pm-sidebar";
+    sb.style.cssText = `
+      position: fixed;
+      top: 0;
+      right: -${SIDEBAR_WIDTH}px;
+      height: 100vh;
+      z-index: 9999;
+      transition: right 0.3s ease-in-out;
+    `;
 
     layout.appendChild(sb);
 
-    subscribeAuthState((state) => renderSidebarBody(sb, state));
+    subscribeAuthState((state) => renderSidebar(sb, state));
     refreshAuthState();
 
     return sb;
   }
 
-  function renderSidebarBody(sb, state) {
-    const body = sb.querySelector("#promptmate-body");
-    const footer = sb.querySelector("#promptmate-footer");
-    if (!body || !footer) return;
+  // ────────────────────────────────────────────────────────────
+  // Render
+  // ────────────────────────────────────────────────────────────
+  function renderSidebar(sb, authState) {
+    sb.innerHTML = "";
 
-    body.innerHTML = "";
-    footer.innerHTML = "";
+    sb.appendChild(buildHeader());
 
-    if (state.loading && !state.signedIn && !state.message) {
-      const loading = document.createElement("p");
-      loading.className = "text-sm text-token-text-secondary p-4 text-center";
+    if (authState.loading && !authState.signedIn && !authState.message) {
+      const loading = document.createElement("div");
+      loading.className = "pm-empty";
       loading.textContent = "Loading…";
-      body.appendChild(loading);
+      sb.appendChild(loading);
       return;
     }
 
-    if (!state.signedIn) {
-      body.appendChild(
-        makeSignInButton({
-          onClick: () => performSignIn().catch((err) => console.warn("PromptMate: sign-in failed", err)),
-          message: state.message,
-          loading: state.loading,
-        })
-      );
+    if (!authState.signedIn) {
+      sb.appendChild(buildSignIn(authState));
       return;
     }
+
+    sb.appendChild(buildSearch());
+    sb.appendChild(buildComposeDisclosure());
+    sb.appendChild(buildSectionLabel("Recent"));
 
     const list = document.createElement("div");
-    list.id = "promptmate-list";
-    body.appendChild(list);
+    list.className = "pm-list";
+    list.id = "pm-list";
+    sb.appendChild(list);
 
-    const addBtn = document.createElement("button");
-    addBtn.id = "add-prompt-btn";
-    addBtn.textContent = "+ Add Prompt";
-    addBtn.addEventListener("click", openPromptModal);
-    body.appendChild(addBtn);
-
-    const shareBtn = document.createElement("button");
-    shareBtn.id = "pm-share-analytics";
-    shareBtn.className = "btn btn-secondary mb-4 mx-3 rounded";
-    shareBtn.textContent = "Share Analytics";
-    shareBtn.addEventListener("click", shareAnalytics);
-    body.appendChild(shareBtn);
+    sb.appendChild(buildFooter(authState));
 
     renderPromptList(list);
-
-    footer.appendChild(
-      makeAuthFooter({
-        email: state.email,
-        onSignOut: () =>
-          performSignOut().catch((err) => console.warn("PromptMate: sign-out failed", err)),
-      })
-    );
   }
 
-  // Create a single prompt-item element wired up to insert text
-  function createPromptItem(prompt) {
-    // Container for the prompt item (stacked layout)
-    const item = document.createElement('div');
-    item.className = 'prompt-item flex flex-col p-2 border-b';
-
-    // Title (16px)
-    const titleEl = document.createElement('h3');
-    titleEl.textContent = prompt.title;
-    titleEl.className = 'font-semibold text-base'; // text-base = 16px
-    item.appendChild(titleEl);
-
-    // PromptBody preview (14px)
-    const bodyPreview = document.createElement('p');
-    const body = prompt.body || '';
-    const preview = body.length > 30 ? body.slice(0, 30) + '…' : body;
-    bodyPreview.textContent = preview;
-    bodyPreview.className = 'text-sm text-gray-600'; // text-sm = 14px
-    item.appendChild(bodyPreview);
-
-    // Actions row: Use button, Copy icon, Edit icon
-    const actions = document.createElement('div');
-    actions.className = 'prompt-actions flex items-center space-x-2 mt-2';
-
-    // Use button (small)
-    const useBtn = document.createElement('button');
-    useBtn.textContent = 'Use';
-    useBtn.className = 'btn btn-xs btn-primary';
-    useBtn.addEventListener('click', () => {
-      recordAnalytics('used');
-      const textarea = document.getElementById('prompt-textarea');
-      if (textarea) {
-        // Build the full prompt content
-        let content = '';
-        // Main prompt body
-        content += `<p>${prompt.body || ''}</p>`;
-        // Tone instruction
-        if (prompt.tone) {
-          content += `<p></p><p>${prompt.tone.instruction}</p>`;
-        }
-        // Format instruction
-        if (prompt.format) {
-          content += `<p></p><p>${prompt.format.instruction}</p>`;
-        }
-        // Insert into the ChatGPT prompt textarea
-        textarea.innerHTML = content;
-        textarea.focus();
-        // Move cursor to end
-        const range = document.createRange();
-        const sel = window.getSelection();
-        range.selectNodeContents(textarea);
-        range.collapse(false);
-        sel.removeAllRanges();
-        sel.addRange(range);
-      }
-    });
-
-    // Copy icon button
-    const copyBtn = document.createElement('button');
-    copyBtn.innerHTML = `
-    <svg fill="#ffffff" height="20" width="20" version="1.1" id="Layer_1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 64 64" enable-background="new 0 0 64 64" xml:space="preserve">
-      <g id="SVGRepo_bgCarrier" stroke-width="0"></g><g id="SVGRepo_tracerCarrier" stroke-linecap="round" stroke-linejoin="round"></g><g id="SVGRepo_iconCarrier"> <g id="Text-files"> 
-        <path d="M53.9791489,9.1429005H50.010849c-0.0826988,0-0.1562004,0.0283995-0.2331009,0.0469999V5.0228 C49.7777481,2.253,47.4731483,0,44.6398468,0h-34.422596C7.3839517,0,5.0793519,2.253,5.0793519,5.0228v46.8432999 c0,2.7697983,2.3045998,5.0228004,5.1378999,5.0228004h6.0367002v2.2678986C16.253952,61.8274002,18.4702511,64,21.1954517,64 h32.783699c2.7252007,0,4.9414978-2.1725998,4.9414978-4.8432007V13.9861002 C58.9206467,11.3155003,56.7043495,9.1429005,53.9791489,9.1429005z M7.1110516,51.8661003V5.0228 c0-1.6487999,1.3938999-2.9909999,3.1062002-2.9909999h34.422596c1.7123032,0,3.1062012,1.3422,3.1062012,2.9909999v46.8432999 c0,1.6487999-1.393898,2.9911003-3.1062012,2.9911003h-34.422596C8.5049515,54.8572006,7.1110516,53.5149002,7.1110516,51.8661003z M56.8888474,59.1567993c0,1.550602-1.3055,2.8115005-2.9096985,2.8115005h-32.783699 c-1.6042004,0-2.9097996-1.2608986-2.9097996-2.8115005v-2.2678986h26.3541946 c2.8333015,0,5.1379013-2.2530022,5.1379013-5.0228004V11.1275997c0.0769005,0.0186005,0.1504021,0.0469999,0.2331009,0.0469999 h3.9682999c1.6041985,0,2.9096985,1.2609005,2.9096985,2.8115005V59.1567993z"></path> <path d="M38.6031494,13.2063999H16.253952c-0.5615005,0-1.0159006,0.4542999-1.0159006,1.0158005 c0,0.5615997,0.4544001,1.0158997,1.0159006,1.0158997h22.3491974c0.5615005,0,1.0158997-0.4542999,1.0158997-1.0158997 C39.6190491,13.6606998,39.16465,13.2063999,38.6031494,13.2063999z"></path> <path d="M38.6031494,21.3334007H16.253952c-0.5615005,0-1.0159006,0.4542999-1.0159006,1.0157986 c0,0.5615005,0.4544001,1.0159016,1.0159006,1.0159016h22.3491974c0.5615005,0,1.0158997-0.454401,1.0158997-1.0159016 C39.6190491,21.7877007,39.16465,21.3334007,38.6031494,21.3334007z"></path> <path d="M38.6031494,29.4603004H16.253952c-0.5615005,0-1.0159006,0.4543991-1.0159006,1.0158997 s0.4544001,1.0158997,1.0159006,1.0158997h22.3491974c0.5615005,0,1.0158997-0.4543991,1.0158997-1.0158997 S39.16465,29.4603004,38.6031494,29.4603004z"></path> <path d="M28.4444485,37.5872993H16.253952c-0.5615005,0-1.0159006,0.4543991-1.0159006,1.0158997 s0.4544001,1.0158997,1.0159006,1.0158997h12.1904964c0.5615025,0,1.0158005-0.4543991,1.0158005-1.0158997 S29.0059509,37.5872993,28.4444485,37.5872993z"></path> 
-      </g> </g>
-    </svg>
-  `;
-    copyBtn.title = 'Copy prompt';
-    copyBtn.className = 'btn-icon';
-    copyBtn.addEventListener('click', () => {
-      recordAnalytics('copied');
-      let text = prompt.body || '';
-      if (prompt.tone) {
-        text += `\nTone (${prompt.tone.option}): ${prompt.tone.instruction}`;
-      }
-      if (prompt.format) {
-        text += `\nFormat (${prompt.format.option}): ${prompt.format.instruction}`;
-      }
-      navigator.clipboard.writeText(text);
-    });
-
-    // Edit icon button (pencil)
-    const editBtn = document.createElement('button');
-    editBtn.innerHTML = `
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg" class="icon-xl-heavy">
-      <path d="M15.6729 3.91287C16.8918 2.69392 18.8682 2.69392 20.0871 3.91287C21.3061 5.13182 21.3061 7.10813 20.0871 8.32708L14.1499 14.2643C13.3849 15.0293 12.3925 15.5255 11.3215 15.6785L9.14142 15.9899C8.82983 16.0344 8.51546 15.9297 8.29289 15.7071C8.07033 15.4845 7.96554 15.1701 8.01005 14.8586L8.32149 12.6785C8.47449 11.6075 8.97072 10.615 9.7357 9.85006L15.6729 3.91287ZM18.6729 5.32708C18.235 4.88918 17.525 4.88918 17.0871 5.32708L11.1499 11.2643C10.6909 11.7233 10.3932 12.3187 10.3014 12.9613L10.1785 13.8215L11.0386 13.6986C11.6812 13.6068 12.2767 13.3091 12.7357 12.8501L18.6729 6.91287C19.1108 6.47497 19.1108 5.76499 18.6729 5.32708ZM11 3.99929C11.0004 4.55157 10.5531 4.99963 10.0008 5.00007C9.00227 5.00084 8.29769 5.00827 7.74651 5.06064C7.20685 5.11191 6.88488 5.20117 6.63803 5.32695C6.07354 5.61457 5.6146 6.07351 5.32698 6.63799C5.19279 6.90135 5.10062 7.24904 5.05118 7.8542C5.00078 8.47105 5 9.26336 5 10.4V13.6C5 14.7366 5.00078 15.5289 5.05118 16.1457C5.10062 16.7509 5.19279 17.0986 5.32698 17.3619C5.6146 17.9264 6.07354 18.3854 6.63803 18.673C6.90138 18.8072 7.24907 18.8993 7.85424 18.9488C8.47108 18.9992 9.26339 19 10.4 19H13.6C14.7366 19 15.5289 18.9992 16.1458 18.9488C16.7509 18.8993 17.0986 18.8072 17.362 18.673C17.9265 18.3854 18.3854 17.9264 18.673 17.3619C18.7988 17.1151 18.8881 16.7931 18.9393 16.2535C18.9917 15.7023 18.9991 14.9977 18.9999 13.9992C19.0003 13.4469 19.4484 12.9995 20.0007 13C20.553 13.0004 21.0003 13.4485 20.9999 14.0007C20.9991 14.9789 20.9932 15.7808 20.9304 16.4426C20.8664 17.116 20.7385 17.7136 20.455 18.2699C19.9757 19.2107 19.2108 19.9756 18.27 20.455C17.6777 20.7568 17.0375 20.8826 16.3086 20.9421C15.6008 21 14.7266 21 13.6428 21H10.3572C9.27339 21 8.39925 21 7.69138 20.9421C6.96253 20.8826 6.32234 20.7568 5.73005 20.455C4.78924 19.9756 4.02433 19.2107 3.54497 18.2699C3.24318 17.6776 3.11737 17.0374 3.05782 16.3086C2.99998 15.6007 2.99999 14.7266 3 13.6428V10.3572C2.99999 9.27337 2.99998 8.39922 3.05782 7.69134C3.11737 6.96249 3.24318 6.3223 3.54497 5.73001C4.02433 4.7892 4.78924 4.0243 5.73005 3.54493C6.28633 3.26149 6.88399 3.13358 7.55735 3.06961C8.21919 3.00673 9.02103 3.00083 9.99922 3.00007C10.5515 2.99964 10.9996 3.447 11 3.99929Z" fill="currentColor"></path>
-    </svg>
-  `;
-    editBtn.title = 'Edit prompt';
-    editBtn.className = 'btn-icon';
-    editBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      recordAnalytics('edited');
-      openEditModal(prompt);
-    });
-
-    const deleteBtn = document.createElement('button');
-    deleteBtn.innerHTML = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" class="icon-md" aria-hidden="true"><path fill-rule="evenodd" clip-rule="evenodd" d="M10.5555 4C10.099 4 9.70052 4.30906 9.58693 4.75114L9.29382 5.8919H14.715L14.4219 4.75114C14.3083 4.30906 13.9098 4 13.4533 4H10.5555ZM16.7799 5.8919L16.3589 4.25342C16.0182 2.92719 14.8226 2 13.4533 2H10.5555C9.18616 2 7.99062 2.92719 7.64985 4.25342L7.22886 5.8919H4C3.44772 5.8919 3 6.33961 3 6.8919C3 7.44418 3.44772 7.8919 4 7.8919H4.10069L5.31544 19.3172C5.47763 20.8427 6.76455 22 8.29863 22H15.7014C17.2354 22 18.5224 20.8427 18.6846 19.3172L19.8993 7.8919H20C20.5523 7.8919 21 7.44418 21 6.8919C21 6.33961 20.5523 5.8919 20 5.8919H16.7799ZM17.888 7.8919H6.11196L7.30423 19.1057C7.3583 19.6142 7.78727 20 8.29863 20H15.7014C16.2127 20 16.6417 19.6142 16.6958 19.1057L17.888 7.8919ZM10 10C10.5523 10 11 10.4477 11 11V16C11 16.5523 10.5523 17 10 17C9.44772 17 9 16.5523 9 16V11C9 10.4477 9.44772 10 10 10ZM14 10C14.5523 10 15 10.4477 15 11V16C15 16.5523 14.5523 17 14 17C13.4477 17 13 16.5523 13 16V11C13 10.4477 13.4477 10 14 10Z" fill="currentColor"></path></svg>`;
-    deleteBtn.title = 'Delete prompt';
-    deleteBtn.className = 'btn-icon';
-    deleteBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      if (confirm('Are you sure you want to delete "' + prompt.title + '" prompt?')) {
-        recordAnalytics('deleted');
-        deletePrompt(prompt.promptId)
-          .then(() => renderPromptList())
-          .catch((err) => {
-            console.warn('PromptMate: delete failed', err);
-            alert('Failed to delete prompt. See console.');
-          });
-      }
-    });
-
-    actions.appendChild(useBtn);
-    actions.appendChild(copyBtn);
-    actions.appendChild(editBtn);
-    actions.appendChild(deleteBtn);
-    item.appendChild(actions);
-
-    return item;
+  function buildHeader() {
+    const wrap = document.createElement("header");
+    wrap.className = "pm-header";
+    wrap.innerHTML = `
+      <div class="pm-brand">
+        <span class="pm-logo">P</span>
+        <span class="pm-brand-name">PromptMate</span>
+      </div>
+      <button class="pm-iconbtn" type="button" aria-label="Close" data-pm-close>
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M3 3l8 8M11 3l-8 8"/></svg>
+      </button>
+    `;
+    wrap.querySelector("[data-pm-close]").addEventListener("click", toggleSidebar);
+    return wrap;
   }
 
-  // Create the prompt modal
-  function createPromptModal() {
-    if (document.querySelector('[data-testid="promptmate-modal"]')) return;
+  function buildSearch() {
+    const wrap = document.createElement("div");
+    wrap.className = "pm-search";
+    wrap.innerHTML = `
+      <span class="pm-search-icon">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="6" cy="6" r="4"/><path d="M9.5 9.5L12 12"/></svg>
+      </span>
+      <input class="pm-search-input" type="search" placeholder="Search prompts…" disabled />
+      <span class="pm-kbd pm-mono">⌘K</span>
+    `;
+    return wrap;
+  }
 
-    // Overlay & wrapper
-    const overlay = document.createElement("div");
-    overlay.dataset.testid = "promptmate-modal";
-    overlay.className = "fixed inset-0 z-50 bg-black/50 dark:bg-black/80 hidden";
-    overlay.style.pointerEvents = "auto";
+  function buildSectionLabel(text) {
+    const el = document.createElement("div");
+    el.className = "pm-section-label";
+    el.textContent = text;
+    return el;
+  }
 
-    // Modal shell (reusing ChatGPT’s popover classes)
-    const modal = document.createElement("div");
-    modal.setAttribute("role", "dialog");
-    modal.className = `
-          popover bg-token-main-surface-primary relative col-start-2 row-start-2
-          rounded-2xl shadow-xl flex flex-col overflow-hidden max-w-[550px] mx-auto my-16
-        `;
+  function buildComposeDisclosure() {
+    const details = document.createElement("details");
+    details.className = "pm-compose";
 
-    // Header
-    const header = document.createElement("div");
-    header.className = "px-4 py-3 border-b border-black/10 dark:border-white/10 flex justify-between items-center";
-    header.innerHTML = `
-          <h2 class="text-lg font-semibold text-token-text-primary">New Prompt</h2>
-        `;
-    const closeBtn = document.createElement("button");
-    closeBtn.dataset.testid = "promptmate-close";
-    closeBtn.type = "button";
-    closeBtn.className = "hover:bg-token-main-surface-secondary p-1 rounded-full";
-    closeBtn.setAttribute("aria-label", "Close");
-    closeBtn.innerHTML = `
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-            <path d="M5.636 5.636a1 1 0 0 1 1.414 0L12 10.586l4.95-4.95a1 1 0 1 1 1.414 1.414L13.414 12l4.95 4.95a1 1 0 0 1-1.414 1.414L12 13.414l-4.95 4.95a1 1 0 0 1-1.414-1.414L10.586 12 5.636 7.05a1 1 0 0 1 0-1.414z" fill="currentColor"/>
-          </svg>
-        `;
-    closeBtn.addEventListener("click", closePromptModal);
-    header.appendChild(closeBtn);
+    const summary = document.createElement("summary");
+    summary.textContent = "Compose options";
+    details.appendChild(summary);
 
-    // Body / form container
     const body = document.createElement("div");
-    body.className = "grow overflow-y-auto p-6";
-    // build fields
-    body.append(
-      makeInputField({ id: 'pm-title', label: 'Title', placeholder: 'E.g. Summarize Discussion' }),
-      makeSelectField({ id: 'pm-tone', label: 'Tone', options: TONE_OPTIONS }),
-      makeSelectField({ id: 'pm-format', label: 'Output Format', options: FORMAT_OPTIONS }),
-      makeInputField({ id: 'pm-prompt-body', label: 'Prompt Body', type: 'textarea', placeholder: 'Write your prompt here…' })
+    body.className = "pm-compose-body";
+
+    body.appendChild(buildSelect("pm-tone-pref", "Tone", TONE_OPTIONS, composePrefs.tone));
+    body.appendChild(buildSelect("pm-format-pref", "Format", FORMAT_OPTIONS, composePrefs.format));
+
+    details.appendChild(body);
+
+    const toneSel = body.querySelector("#pm-tone-pref");
+    const formatSel = body.querySelector("#pm-format-pref");
+
+    toneSel.addEventListener("change", () => {
+      composePrefs.tone = toneSel.value || null;
+      setComposePrefs(composePrefs).catch(() => {});
+    });
+    formatSel.addEventListener("change", () => {
+      composePrefs.format = formatSel.value || null;
+      setComposePrefs(composePrefs).catch(() => {});
+    });
+
+    return details;
+  }
+
+  function buildSelect(id, label, options, currentValue) {
+    const wrap = document.createElement("label");
+    wrap.style.display = "flex";
+    wrap.style.flexDirection = "column";
+    wrap.style.gap = "4px";
+    wrap.htmlFor = id;
+
+    const lbl = document.createElement("span");
+    lbl.className = "pm-field-label pm-mono";
+    lbl.textContent = label;
+
+    const select = document.createElement("select");
+    select.id = id;
+    select.className = "pm-select";
+
+    const placeholder = document.createElement("option");
+    placeholder.value = "";
+    placeholder.textContent = `— ${label} —`;
+    select.appendChild(placeholder);
+
+    const cats = [...new Set(options.map((o) => o.category))];
+    cats.forEach((cat) => {
+      const og = document.createElement("optgroup");
+      og.label = cat;
+      options
+        .filter((o) => o.category === cat)
+        .forEach((o) => {
+          const opt = document.createElement("option");
+          opt.value = o.option;
+          opt.textContent = o.option;
+          og.appendChild(opt);
+        });
+      select.appendChild(og);
+    });
+
+    if (currentValue) select.value = currentValue;
+
+    wrap.append(lbl, select);
+    return wrap;
+  }
+
+  function buildFooter(authState) {
+    const footer = document.createElement("footer");
+    footer.className = "pm-footer";
+
+    const newBtn = document.createElement("button");
+    newBtn.className = "pm-btn pm-btn-primary pm-btn-block";
+    newBtn.type = "button";
+    newBtn.innerHTML = `
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M7 3v8M3 7h8"/></svg>
+      New prompt
+    `;
+    newBtn.addEventListener("click", () => openPromptModal());
+    footer.appendChild(newBtn);
+
+    const row = document.createElement("div");
+    row.className = "pm-foot-row";
+
+    const user = document.createElement("div");
+    user.className = "pm-user";
+    const email = authState.email || "";
+    const initial = (email.trim()[0] || "?").toUpperCase();
+    user.innerHTML = `
+      <span class="pm-avatar">${initial}</span>
+      <span class="pm-email" title="${escapeAttr(email)}">${escapeText(email || "Signed in")}</span>
+    `;
+    row.appendChild(user);
+
+    const signOut = document.createElement("button");
+    signOut.className = "pm-link";
+    signOut.type = "button";
+    signOut.textContent = "Sign out";
+    signOut.addEventListener("click", () =>
+      performSignOut().catch((err) => console.warn("PromptMate: sign-out failed", err))
     );
+    row.appendChild(signOut);
 
-    // Footer / actions
-    const footer = document.createElement("div");
-    footer.className = "px-4 py-3 border-t border-black/10 dark:border-white/10 flex justify-end gap-3";
-    const cancelBtn = document.createElement("button");
-    cancelBtn.textContent = "Cancel";
-    cancelBtn.className = "btn btn-tertiary";
-    cancelBtn.addEventListener("click", closePromptModal);
+    footer.appendChild(row);
 
-    const saveBtn = document.createElement("button");
-    saveBtn.textContent = "Save";
-    saveBtn.className = "btn btn-primary";
-    saveBtn.addEventListener("click", onSaveNewPrompt);
+    const sync = document.createElement("div");
+    sync.className = "pm-sync-status";
+    sync.id = "pm-sync-status";
+    footer.appendChild(sync);
 
-    footer.append(cancelBtn, saveBtn);
-
-    // assemble
-    modal.append(header, body, footer);
-    overlay.appendChild(modal);
-    document.body.appendChild(overlay);
+    return footer;
   }
 
-  // Open/Close the prompt modal
-  function openPromptModal() {
-    createPromptModal();
-    document.querySelector('[data-testid="promptmate-modal"]').classList.remove("hidden");
-  }
-  function closePromptModal() {
-    document.getElementById('pm-title').value = '';
-    document.getElementById('pm-prompt-body').value = '';
-    document.getElementById('pm-tone').value = '';
-    document.getElementById('pm-format').value = '';
-    document.querySelector('[data-testid="promptmate-modal"]').classList.add("hidden");
-  }
+  function buildSignIn(authState) {
+    const wrap = document.createElement("div");
+    wrap.className = "pm-signin";
 
-  // Save the new prompt
-  function onSaveNewPrompt() {
-    const modal = document.querySelector('[data-testid="promptmate-modal"]');
-    const editId = modal.dataset.editPromptId;
-    const title = document.getElementById('pm-title').value.trim();
-    const bodyText = document.getElementById('pm-prompt-body').value.trim();
-    const toneOpt = document.getElementById('pm-tone').value;
-    const formatOpt = document.getElementById('pm-format').value;
-    if (!title || !bodyText || !toneOpt || !formatOpt) {
-      return alert('Title, Tone, Output Format, and Prompt Body are required.');
+    const msg = document.createElement("p");
+    msg.className = "pm-signin-msg";
+    msg.textContent = "Sign in to sync your prompts with Google Drive.";
+    wrap.appendChild(msg);
+
+    if (authState.message) {
+      const err = document.createElement("p");
+      err.className = "pm-signin-error";
+      err.textContent = authState.message;
+      wrap.appendChild(err);
     }
-    const toneOption = TONE_OPTIONS.find(o => o.option === toneOpt);
-    const formatOption = FORMAT_OPTIONS.find(o => o.option === formatOpt);
 
-    document.getElementById('pm-title').value = '';
-    document.getElementById('pm-prompt-body').value = '';
-    document.getElementById('pm-tone').value = '';
-    document.getElementById('pm-format').value = '';
+    const btn = document.createElement("button");
+    btn.className = "pm-btn pm-btn-primary";
+    btn.type = "button";
+    btn.disabled = !!authState.loading;
+    btn.textContent = authState.loading ? "Signing in…" : "Sign in with Google";
+    btn.addEventListener("click", () =>
+      performSignIn().catch((err) => console.warn("PromptMate: sign-in failed", err))
+    );
+    wrap.appendChild(btn);
+    return wrap;
+  }
 
-    const payload = {
-      promptId: editId || undefined,
-      title,
-      body: bodyText,
-      tone: toneOption,
-      format: formatOption,
+  // ────────────────────────────────────────────────────────────
+  // Prompt list + cards
+  // ────────────────────────────────────────────────────────────
+  function renderPromptList(listEl) {
+    if (!listEl) listEl = document.getElementById("pm-list");
+    if (!listEl) return;
+
+    listPrompts((prompts, meta) => {
+      listEl.innerHTML = "";
+      if (!prompts.length) {
+        const empty = document.createElement("div");
+        empty.className = "pm-empty";
+        empty.textContent = "No prompts yet. Click “New prompt” below to create one.";
+        listEl.appendChild(empty);
+      } else {
+        prompts.forEach((p) => listEl.appendChild(buildCard(p)));
+      }
+      updateSyncIndicator(meta);
+    });
+  }
+
+  function buildCard(prompt) {
+    const card = document.createElement("article");
+    card.className = "pm-card";
+
+    const head = document.createElement("div");
+    head.className = "pm-card-head";
+
+    const titleWrap = document.createElement("div");
+    titleWrap.className = "pm-card-title-wrap";
+    if (prompt.pinned) {
+      const pin = document.createElement("span");
+      pin.className = "pm-pin";
+      pin.innerHTML = `<svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor"><path d="M5 1h2v4l2 2v1H3V7l2-2V1z"/><path d="M6 8v3" stroke="currentColor" stroke-width="1" stroke-linecap="round"/></svg>`;
+      titleWrap.appendChild(pin);
+    }
+    const title = document.createElement("span");
+    title.className = "pm-card-title";
+    title.textContent = prompt.title || "(untitled)";
+    titleWrap.appendChild(title);
+    head.appendChild(titleWrap);
+
+    head.appendChild(buildMoreMenu(prompt));
+    card.appendChild(head);
+
+    const desc = document.createElement("p");
+    desc.className = "pm-card-desc";
+    desc.textContent = prompt.body || "";
+    card.appendChild(desc);
+
+    const foot = document.createElement("div");
+    foot.className = "pm-card-foot";
+
+    const useBtn = document.createElement("button");
+    useBtn.className = "pm-btn pm-btn-primary";
+    useBtn.type = "button";
+    useBtn.textContent = "Use";
+    useBtn.addEventListener("click", () => onUse(prompt));
+    foot.appendChild(useBtn);
+
+    if (prompt.used > 0) {
+      const used = document.createElement("span");
+      used.className = "pm-used";
+      used.textContent = `${prompt.used}×`;
+      foot.appendChild(used);
+    }
+
+    card.appendChild(foot);
+    return card;
+  }
+
+  function buildMoreMenu(prompt) {
+    const wrap = document.createElement("div");
+    wrap.className = "pm-menu-wrap";
+
+    const btn = document.createElement("button");
+    btn.className = "pm-iconbtn";
+    btn.type = "button";
+    btn.setAttribute("aria-label", "More actions");
+    btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor"><circle cx="3" cy="7" r="1.2"/><circle cx="7" cy="7" r="1.2"/><circle cx="11" cy="7" r="1.2"/></svg>`;
+
+    const menu = document.createElement("div");
+    menu.className = "pm-menu";
+
+    const copy = document.createElement("button");
+    copy.className = "pm-menu-item";
+    copy.type = "button";
+    copy.textContent = "Copy";
+    copy.addEventListener("click", (e) => {
+      e.stopPropagation();
+      menu.classList.remove("open");
+      onCopy(prompt);
+    });
+
+    const edit = document.createElement("button");
+    edit.className = "pm-menu-item";
+    edit.type = "button";
+    edit.textContent = "Edit";
+    edit.addEventListener("click", (e) => {
+      e.stopPropagation();
+      menu.classList.remove("open");
+      openPromptModal(prompt);
+    });
+
+    const del = document.createElement("button");
+    del.className = "pm-menu-item pm-danger";
+    del.type = "button";
+    del.textContent = "Delete";
+    del.addEventListener("click", (e) => {
+      e.stopPropagation();
+      menu.classList.remove("open");
+      onDelete(prompt);
+    });
+
+    menu.append(copy, edit, del);
+
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      // Close any other open menus first.
+      document.querySelectorAll(".pm-menu.open").forEach((m) => {
+        if (m !== menu) m.classList.remove("open");
+      });
+      menu.classList.toggle("open");
+    });
+
+    // Outside click closes the menu.
+    const closeOnOutside = (e) => {
+      if (!wrap.contains(e.target)) menu.classList.remove("open");
     };
-    if (editId) {
-      delete modal.dataset.editPromptId;
-      recordAnalytics('edited');
-    } else {
-      recordAnalytics('created');
+    document.addEventListener("click", closeOnOutside);
+
+    wrap.append(btn, menu);
+    return wrap;
+  }
+
+  // ────────────────────────────────────────────────────────────
+  // Actions
+  // ────────────────────────────────────────────────────────────
+  function composeText(prompt) {
+    const tone = TONE_OPTIONS.find((t) => t.option === composePrefs.tone) || prompt.tone;
+    const format = FORMAT_OPTIONS.find((f) => f.option === composePrefs.format) || prompt.format;
+    let html = `<p>${escapeText(prompt.body || "")}</p>`;
+    if (tone?.instruction) html += `<p></p><p>${escapeText(tone.instruction)}</p>`;
+    if (format?.instruction) html += `<p></p><p>${escapeText(format.instruction)}</p>`;
+    return html;
+  }
+
+  function composePlainText(prompt) {
+    const tone = TONE_OPTIONS.find((t) => t.option === composePrefs.tone) || prompt.tone;
+    const format = FORMAT_OPTIONS.find((f) => f.option === composePrefs.format) || prompt.format;
+    let text = prompt.body || "";
+    if (tone) text += `\nTone (${tone.option}): ${tone.instruction}`;
+    if (format) text += `\nFormat (${format.option}): ${format.instruction}`;
+    return text;
+  }
+
+  function onUse(prompt) {
+    recordAnalytics("used");
+    const textarea = document.getElementById("prompt-textarea");
+    if (!textarea) return;
+    textarea.innerHTML = composeText(prompt);
+    textarea.focus();
+    const range = document.createRange();
+    const sel = window.getSelection();
+    range.selectNodeContents(textarea);
+    range.collapse(false);
+    sel.removeAllRanges();
+    sel.addRange(range);
+  }
+
+  function onCopy(prompt) {
+    recordAnalytics("copied");
+    navigator.clipboard.writeText(composePlainText(prompt)).catch(() => {});
+  }
+
+  function onDelete(prompt) {
+    if (!confirm(`Delete "${prompt.title}"?`)) return;
+    recordAnalytics("deleted");
+    deletePrompt(prompt.promptId)
+      .then(() => renderPromptList())
+      .catch((err) => {
+        console.warn("PromptMate: delete failed", err);
+        alert("Failed to delete prompt. See console.");
+      });
+  }
+
+  // ────────────────────────────────────────────────────────────
+  // Modal (title + body only — Tone/Format moved to the disclosure)
+  // ────────────────────────────────────────────────────────────
+  function openPromptModal(prompt) {
+    closePromptModal();
+
+    const overlay = document.createElement("div");
+    overlay.className = "pm-modal-overlay";
+    overlay.id = "pm-modal-overlay";
+    overlay.addEventListener("click", (e) => {
+      if (e.target === overlay) closePromptModal();
+    });
+
+    const modal = document.createElement("div");
+    modal.className = "pm-modal";
+    modal.setAttribute("role", "dialog");
+
+    const isEdit = !!prompt;
+    const head = document.createElement("div");
+    head.className = "pm-modal-head";
+    head.innerHTML = `
+      <h2 class="pm-modal-title">${isEdit ? "Edit prompt" : "New prompt"}</h2>
+      <button class="pm-iconbtn" type="button" aria-label="Close" data-pm-modal-close>
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M3 3l8 8M11 3l-8 8"/></svg>
+      </button>
+    `;
+    head.querySelector("[data-pm-modal-close]").addEventListener("click", closePromptModal);
+
+    const body = document.createElement("div");
+    body.className = "pm-modal-body";
+
+    const titleField = makeField("pm-title", "Title", "input", "E.g. Summarize discussion");
+    const bodyField = makeField("pm-prompt-body", "Prompt body", "textarea", "Write your prompt here…");
+    body.append(titleField.wrap, bodyField.wrap);
+
+    const foot = document.createElement("div");
+    foot.className = "pm-modal-foot";
+
+    const cancel = document.createElement("button");
+    cancel.className = "pm-btn pm-btn-secondary";
+    cancel.type = "button";
+    cancel.textContent = "Cancel";
+    cancel.addEventListener("click", closePromptModal);
+
+    const save = document.createElement("button");
+    save.className = "pm-btn pm-btn-primary";
+    save.type = "button";
+    save.textContent = "Save";
+    save.addEventListener("click", () => onSavePrompt(prompt));
+
+    foot.append(cancel, save);
+    modal.append(head, body, foot);
+    overlay.appendChild(modal);
+
+    // Mount inside the sidebar so the v2 token scope applies.
+    const sb = document.getElementById(SIDEBAR_ID);
+    (sb || document.body).appendChild(overlay);
+
+    if (isEdit) {
+      titleField.input.value = prompt.title || "";
+      bodyField.input.value = prompt.body || "";
+      modal.dataset.editId = prompt.promptId;
     }
 
-    savePrompt(payload)
+    titleField.input.focus();
+  }
+
+  function closePromptModal() {
+    const overlay = document.getElementById("pm-modal-overlay");
+    if (overlay) overlay.remove();
+  }
+
+  function onSavePrompt(existing) {
+    const titleEl = document.getElementById("pm-title");
+    const bodyEl = document.getElementById("pm-prompt-body");
+    const title = titleEl.value.trim();
+    const body = bodyEl.value.trim();
+    if (!title || !body) {
+      alert("Title and prompt body are required.");
+      return;
+    }
+
+    if (existing) recordAnalytics("edited");
+    else recordAnalytics("created");
+
+    savePrompt({
+      promptId: existing?.promptId,
+      title,
+      body,
+      // Preserve any legacy tone/format already on the prompt.
+      tone: existing?.tone ?? null,
+      format: existing?.format ?? null,
+      pinned: existing?.pinned === true,
+      used: Number.isFinite(existing?.used) ? existing.used : 0,
+    })
       .then(() => {
         closePromptModal();
         renderPromptList();
       })
       .catch((err) => {
-        console.warn('PromptMate: save failed', err);
-        alert('Failed to save prompt. See console.');
+        console.warn("PromptMate: save failed", err);
+        alert("Failed to save prompt. See console.");
       });
   }
 
-  function openEditModal(prompt) {
-    // Ensure the modal setup is initialized (in case new prompt creation ran earlier)
-    createPromptModal();
+  function makeField(id, label, kind, placeholder) {
+    const wrap = document.createElement("label");
+    wrap.htmlFor = id;
+    wrap.style.display = "flex";
+    wrap.style.flexDirection = "column";
+    wrap.style.gap = "6px";
 
-    const modal = document.querySelector('[data-testid="promptmate-modal"]');
-    document.getElementById('pm-title').value = prompt.title;
-    document.getElementById('pm-prompt-body').value = prompt.body || '';
-    document.getElementById('pm-tone').value = prompt.tone?.option || '';
-    document.getElementById('pm-format').value = prompt.format?.option || '';
-    modal.dataset.editPromptId = prompt.promptId;
-    modal.classList.remove('hidden');
+    const lbl = document.createElement("span");
+    lbl.className = "pm-field-label pm-mono";
+    lbl.textContent = label;
+
+    const input = document.createElement(kind === "textarea" ? "textarea" : "input");
+    input.id = id;
+    input.placeholder = placeholder;
+    input.className = kind === "textarea" ? "pm-textarea" : "pm-input";
+
+    wrap.append(lbl, input);
+    return { wrap, input };
   }
 
-
-  function renderPromptList(listEl) {
-    if (!listEl) listEl = document.getElementById('promptmate-list');
-    if (!listEl) return;
-
-    listPrompts((prompts, meta) => {
-      listEl.innerHTML = '';
-      prompts.forEach(p => listEl.appendChild(createPromptItem(p)));
-      updateSyncIndicator(meta);
-    });
-  }
-
+  // ────────────────────────────────────────────────────────────
+  // Sync indicator
+  // ────────────────────────────────────────────────────────────
   function updateSyncIndicator(meta) {
-    const footer = document.getElementById('promptmate-footer');
-    if (!footer) return;
-    let indicator = footer.querySelector('#promptmate-sync-status');
-    if (!indicator) {
-      indicator = document.createElement('div');
-      indicator.id = 'promptmate-sync-status';
-      indicator.style.cssText = 'font-size:11px;color:#888;padding:0 1rem 0.5rem;';
-      footer.prepend(indicator);
-    }
+    const indicator = document.getElementById("pm-sync-status");
+    if (!indicator) return;
     if (meta?.pendingCount > 0) {
-      indicator.textContent = `${meta.pendingCount} change${meta.pendingCount > 1 ? 's' : ''} pending sync…`;
+      indicator.textContent = `${meta.pendingCount} change${meta.pendingCount > 1 ? "s" : ""} pending sync…`;
     } else if (meta?.fromCache) {
-      indicator.textContent = 'Syncing…';
+      indicator.textContent = "Syncing…";
     } else {
-      indicator.textContent = '';
+      indicator.textContent = "";
     }
   }
 
+  // ────────────────────────────────────────────────────────────
+  // Helpers
+  // ────────────────────────────────────────────────────────────
+  function escapeText(s) {
+    return String(s ?? "").replace(/[&<>"']/g, (c) => ({
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#39;",
+    }[c]));
+  }
 
-  // React-safe re-injection
+  function escapeAttr(s) {
+    return escapeText(s);
+  }
+
+  // React-safe re-injection of the header button.
   const obs = new MutationObserver(createPromptMateButton);
   obs.observe(document.body, { childList: true, subtree: true });
   window.addEventListener("load", () => setTimeout(createPromptMateButton, 500));

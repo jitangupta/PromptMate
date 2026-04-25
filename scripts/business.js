@@ -249,8 +249,19 @@ function sortPromptsByCreation(entries) {
   });
 }
 
+// Backfill v2 fields on read so the UI never has to defend against undefined.
+// Persisted values win; missing values become safe defaults.
+function normalizePrompt(p) {
+  if (!p) return p;
+  return {
+    ...p,
+    pinned: typeof p.pinned === "boolean" ? p.pinned : false,
+    used: Number.isFinite(p.used) ? p.used : 0,
+  };
+}
+
 function promptsArray(cache) {
-  return sortPromptsByCreation(Object.values(cache.prompts || {}));
+  return sortPromptsByCreation(Object.values(cache.prompts || {})).map(normalizePrompt);
 }
 
 function metaFromCache(cache) {
@@ -322,6 +333,8 @@ async function reconcileFromDrive() {
         body: content.body ?? "",
         tone: content.tone ?? null,
         format: content.format ?? null,
+        pinned: typeof content.pinned === "boolean" ? content.pinned : false,
+        used: Number.isFinite(content.used) ? content.used : 0,
         createdAt: content.createdAt ?? new Date().toISOString(),
         updatedAt: content.updatedAt ?? meta.modifiedTime ?? new Date().toISOString(),
         fileId: meta.fileId,
@@ -352,6 +365,8 @@ function toDrivePayload(prompt) {
     body: prompt.body ?? "",
     tone: prompt.tone ?? "",
     format: prompt.format ?? "",
+    pinned: prompt.pinned === true,
+    used: Number.isFinite(prompt.used) ? prompt.used : 0,
     createdAt: prompt.createdAt,
   };
 }
@@ -385,6 +400,15 @@ export async function savePrompt(input) {
     body: input.body ?? "",
     tone: input.tone ?? null,
     format: input.format ?? null,
+    pinned:
+      typeof input.pinned === "boolean"
+        ? input.pinned
+        : existing?.pinned === true,
+    used: Number.isFinite(input.used)
+      ? input.used
+      : Number.isFinite(existing?.used)
+      ? existing.used
+      : 0,
     createdAt: existing?.createdAt ?? input.createdAt ?? now,
     updatedAt: now,
   };
@@ -530,6 +554,8 @@ export async function importSharedPrompt(externalFileId) {
       body: content.body ?? "",
       tone: content.tone ?? null,
       format: content.format ?? null,
+      pinned: typeof content.pinned === "boolean" ? content.pinned : false,
+      used: Number.isFinite(content.used) ? content.used : 0,
       createdAt: content.createdAt ?? new Date().toISOString(),
       updatedAt: content.updatedAt ?? new Date().toISOString(),
       fileId,
@@ -625,6 +651,45 @@ export async function drainPendingWrites() {
   return { drained, remaining: remaining.length };
 }
 
+// ---- Compose prefs (session-level Tone/Format selection) ----
+
+const COMPOSE_PREFS_KEY = "promptmate.composePrefs";
+
+export function getComposePrefs() {
+  return new Promise((resolve) => {
+    chrome.storage.local.get([COMPOSE_PREFS_KEY], (res) => {
+      const stored = res?.[COMPOSE_PREFS_KEY] || {};
+      resolve({ tone: stored.tone ?? null, format: stored.format ?? null });
+    });
+  });
+}
+
+export function setComposePrefs(prefs) {
+  return new Promise((resolve) => {
+    chrome.storage.local.set(
+      { [COMPOSE_PREFS_KEY]: { tone: prefs?.tone ?? null, format: prefs?.format ?? null } },
+      () => resolve()
+    );
+  });
+}
+
+// ---- Pin / used helpers (used by stages 2 and 4) ----
+
+export async function setPromptPinned(promptId, pinned) {
+  const cache = await readCache();
+  const existing = cache.prompts?.[promptId];
+  if (!existing) return;
+  return savePrompt({ ...existing, pinned: !!pinned });
+}
+
+export async function incrementPromptUsed(promptId) {
+  const cache = await readCache();
+  const existing = cache.prompts?.[promptId];
+  if (!existing) return;
+  const nextUsed = (Number.isFinite(existing.used) ? existing.used : 0) + 1;
+  return savePrompt({ ...existing, used: nextUsed });
+}
+
 // ---- Analytics (device-local, unchanged) ----
 
 export function recordAnalytics(action) {
@@ -635,14 +700,3 @@ export function recordAnalytics(action) {
   });
 }
 
-export function shareAnalytics() {
-  chrome.storage.local.get(['analytics'], (result) => {
-    const analytics = result.analytics || {
-      created: 0, used: 0, copied: 0, edited: 0, deleted: 0
-    };
-    const summary = `${analytics.created} prompts created, ${analytics.used} times used, ${analytics.edited} times edited, ${analytics.copied} times copied and ${analytics.deleted} times deleted`;
-    navigator.clipboard.writeText(summary).then(() => {
-      alert('Analytics copied to clipboard! \n' + summary);
-    });
-  });
-}
