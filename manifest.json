@@ -46,8 +46,7 @@
     },
     {
       "matches": ["*://claude.ai/*"],
-      "js": ["dist/claude-content.bundle.js"],
-      "css": ["styles/claude.css"]
+      "js": ["dist/claude-content.bundle.js"]
     }
   ]
 }

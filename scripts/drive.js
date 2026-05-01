@@ -22,6 +22,8 @@ function buildFileBody(prompt) {
     body: prompt.body ?? "",
     tone: prompt.tone ?? "",
     format: prompt.format ?? "",
+    pinned: prompt.pinned === true,
+    used: Number.isFinite(prompt.used) ? prompt.used : 0,
     createdAt: prompt.createdAt ?? now,
     updatedAt: now,
   };

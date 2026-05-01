@@ -1,0 +1,742 @@
+/*
+ * PromptMate v2 — shared panel styles for both ChatGPT and Claude hosts.
+ * Tokens are oklch; light mode is opt-in via prefers-color-scheme so panel
+ * theme follows the host (which itself follows the user's OS setting in 2026).
+ * All selectors live under .pm-sidebar so we don't leak into the host page.
+ */
+
+.pm-sidebar {
+  /* Dark palette (default) */
+  --pm-green: oklch(72% 0.16 152);
+  --pm-green-hover: oklch(76% 0.16 152);
+  --pm-green-deep: oklch(58% 0.14 152);
+  --pm-on-green: oklch(16% 0.01 150);
+
+  --pm-bg: oklch(17% 0.008 150);
+  --pm-card: oklch(22% 0.008 150);
+  --pm-card-hover: oklch(26% 0.008 150);
+  --pm-card-border: oklch(30% 0.006 150);
+  --pm-input-bg: oklch(22% 0.008 150);
+  --pm-border: oklch(24% 0.006 150);
+  --pm-footer-bg: oklch(15% 0.008 150);
+  --pm-text: oklch(96% 0.005 95);
+  --pm-text-2: oklch(68% 0.008 150);
+  --pm-text-3: oklch(50% 0.008 150);
+  --pm-kbd-bg: oklch(28% 0.006 150);
+  --pm-overlay: oklch(0% 0 0 / 0.55);
+  --pm-shadow: 0 1px 2px oklch(0% 0 0 / 0.1), 0 12px 40px oklch(0% 0 0 / 0.25);
+
+  /* Lock width: Claude's host stylesheet has high-specificity rules that
+   * otherwise leak in and stretch the panel. !important here is defensive,
+   * not stylistic — both hosts must render the panel at exactly 380px. */
+  width: 380px !important;
+  min-width: 380px;
+  max-width: 380px;
+  height: 100%;
+  margin: 0 !important;
+  padding: 0 !important;
+  display: flex;
+  flex-direction: column;
+  background: var(--pm-bg);
+  color: var(--pm-text);
+  border-left: 1px solid var(--pm-border);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue",
+    system-ui, sans-serif;
+  font-size: 13px;
+  line-height: 1.4;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  box-sizing: border-box;
+}
+
+@media (prefers-color-scheme: light) {
+  .pm-sidebar {
+    --pm-bg: oklch(99% 0.003 95);
+    --pm-card: oklch(100% 0 0);
+    --pm-card-hover: oklch(98% 0.004 95);
+    --pm-card-border: oklch(91% 0.005 95);
+    --pm-input-bg: oklch(96% 0.005 95);
+    --pm-border: oklch(91% 0.005 95);
+    --pm-footer-bg: oklch(97% 0.004 95);
+    --pm-text: oklch(20% 0.01 150);
+    --pm-text-2: oklch(48% 0.008 150);
+    --pm-text-3: oklch(62% 0.008 150);
+    --pm-kbd-bg: oklch(92% 0.005 95);
+    --pm-overlay: oklch(0% 0 0 / 0.4);
+    --pm-shadow: 0 1px 2px oklch(0% 0 0 / 0.04), 0 8px 24px oklch(0% 0 0 / 0.08);
+  }
+}
+
+.pm-sidebar *,
+.pm-sidebar *::before,
+.pm-sidebar *::after {
+  box-sizing: border-box;
+}
+
+.pm-mono {
+  font-family: ui-monospace, SFMono-Regular, "Menlo", "Consolas", monospace;
+}
+
+/* ── Header ─────────────────────────────────────────────────── */
+.pm-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 18px 12px;
+}
+
+.pm-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pm-logo {
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
+  background: var(--pm-green);
+  color: var(--pm-on-green);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.pm-brand-name {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.2px;
+  color: var(--pm-text);
+}
+
+.pm-iconbtn {
+  background: transparent;
+  border: none;
+  color: var(--pm-text-2);
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  font-family: inherit;
+}
+
+.pm-iconbtn:hover {
+  background: var(--pm-card-hover);
+  color: var(--pm-text);
+}
+
+/* ── Search ─────────────────────────────────────────────────── */
+.pm-sidebar .pm-search {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 18px 12px;
+  padding: 9px 12px;
+  background: var(--pm-input-bg);
+  border: 1px solid var(--pm-border);
+  border-radius: 10px;
+  transition: border-color 0.12s, box-shadow 0.12s;
+  box-sizing: border-box;
+}
+
+.pm-search:focus-within {
+  border-color: var(--pm-green);
+  box-shadow: 0 0 0 3px oklch(72% 0.16 152 / 0.18);
+}
+
+.pm-search-icon {
+  display: inline-flex;
+  color: var(--pm-text-2);
+}
+
+.pm-search-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--pm-text);
+  font-size: 13px;
+  font-family: inherit;
+  min-width: 0;
+}
+
+.pm-search-input::placeholder {
+  color: var(--pm-text-3);
+}
+
+.pm-kbd {
+  font-size: 10px;
+  color: var(--pm-text-3);
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--pm-kbd-bg);
+}
+
+/* ── Compose options disclosure ─────────────────────────────── */
+.pm-compose {
+  margin: 0 18px 12px;
+  border: 1px solid var(--pm-border);
+  border-radius: 10px;
+  background: var(--pm-input-bg);
+  overflow: hidden;
+}
+
+.pm-compose > summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 9px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--pm-text-2);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  user-select: none;
+}
+
+.pm-compose > summary::-webkit-details-marker {
+  display: none;
+}
+
+.pm-compose > summary::after {
+  content: "▾";
+  color: var(--pm-text-3);
+  font-size: 10px;
+  margin-left: 8px;
+  transition: transform 0.15s;
+}
+
+.pm-compose[open] > summary::after {
+  transform: rotate(180deg);
+}
+
+.pm-compose-body {
+  padding: 4px 12px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pm-field-label {
+  font-size: 11px;
+  color: var(--pm-text-3);
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+}
+
+.pm-select {
+  width: 100%;
+  background: var(--pm-bg);
+  border: 1px solid var(--pm-border);
+  border-radius: 8px;
+  color: var(--pm-text);
+  font-family: inherit;
+  font-size: 13px;
+  padding: 8px 10px;
+  cursor: pointer;
+  appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, var(--pm-text-2) 50%),
+    linear-gradient(135deg, var(--pm-text-2) 50%, transparent 50%);
+  background-position: calc(100% - 14px) 50%, calc(100% - 9px) 50%;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+  padding-right: 28px;
+}
+
+.pm-select:focus {
+  outline: none;
+  border-color: var(--pm-green);
+  box-shadow: 0 0 0 3px oklch(72% 0.16 152 / 0.18);
+}
+
+/* ── Section label ──────────────────────────────────────────── */
+.pm-section-label {
+  padding: 0 18px 8px;
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--pm-text-3);
+  font-family: ui-monospace, SFMono-Regular, "Menlo", "Consolas", monospace;
+}
+
+/* When the label sits inside the list, the list already provides horizontal
+ * padding — drop the label's own to avoid doubling up. Successive labels get
+ * a little breathing room from the cards above. */
+.pm-list .pm-section-label {
+  padding: 0 0 6px;
+}
+
+.pm-list .pm-section-label:not(:first-child) {
+  padding-top: 12px;
+}
+
+/* ── List ──────────────────────────────────────────────────── */
+.pm-list {
+  flex: 1;
+  padding: 0 18px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.pm-empty {
+  padding: 32px 16px;
+  text-align: center;
+  color: var(--pm-text-2);
+  font-size: 13px;
+}
+
+/* ── Card ──────────────────────────────────────────────────── */
+.pm-card {
+  background: var(--pm-card);
+  border: 1px solid var(--pm-card-border);
+  border-radius: 12px;
+  padding: 14px 14px 12px;
+  transition: background 0.12s, border-color 0.12s;
+  position: relative;
+}
+
+.pm-card:hover {
+  background: var(--pm-card-hover);
+}
+
+.pm-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.pm-card-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex: 1;
+}
+
+.pm-pin {
+  color: var(--pm-green);
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
+.pm-card-title {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.1px;
+  color: var(--pm-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pm-card-desc {
+  font-size: 12.5px;
+  color: var(--pm-text-2);
+  line-height: 1.45;
+  margin: 0 0 12px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-wrap: pretty;
+}
+
+.pm-card-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.pm-used {
+  font-family: ui-monospace, SFMono-Regular, "Menlo", "Consolas", monospace;
+  font-size: 10px;
+  color: var(--pm-text-3);
+}
+
+/* ── Buttons ───────────────────────────────────────────────── */
+.pm-btn {
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.1px;
+  border: none;
+  border-radius: 8px;
+  padding: 7px 16px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: background 0.12s;
+}
+
+.pm-btn-primary {
+  background: var(--pm-green);
+  color: var(--pm-on-green);
+}
+
+.pm-btn-primary:hover {
+  background: var(--pm-green-hover);
+}
+
+.pm-btn-primary:disabled {
+  background: var(--pm-text-3);
+  color: var(--pm-bg);
+  cursor: not-allowed;
+}
+
+.pm-btn-secondary {
+  background: transparent;
+  color: var(--pm-text);
+  border: 1px solid var(--pm-border);
+}
+
+.pm-btn-secondary:hover {
+  background: var(--pm-card-hover);
+}
+
+.pm-btn-block {
+  width: 100%;
+  padding: 11px 14px;
+  font-size: 13.5px;
+  border-radius: 10px;
+}
+
+/* ── More menu (⋯) ─────────────────────────────────────────── */
+.pm-menu-wrap {
+  position: relative;
+}
+
+.pm-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 4px;
+  min-width: 140px;
+  background: var(--pm-card);
+  border: 1px solid var(--pm-card-border);
+  border-radius: 8px;
+  box-shadow: var(--pm-shadow);
+  padding: 4px;
+  z-index: 20;
+  display: none;
+}
+
+.pm-menu.open {
+  display: block;
+}
+
+.pm-menu-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: transparent;
+  color: var(--pm-text);
+  font-family: inherit;
+  font-size: 12.5px;
+  padding: 7px 10px;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.pm-menu-item:hover {
+  background: var(--pm-card-hover);
+}
+
+.pm-menu-item.pm-danger {
+  color: oklch(65% 0.18 25);
+}
+
+.pm-menu-item.pm-danger:hover {
+  background: oklch(45% 0.12 25 / 0.18);
+}
+
+@media (prefers-color-scheme: light) {
+  .pm-menu-item.pm-danger {
+    color: oklch(50% 0.2 25);
+  }
+}
+
+/* ── Footer ────────────────────────────────────────────────── */
+.pm-footer {
+  padding: 12px 18px 14px;
+  background: var(--pm-footer-bg);
+  border-top: 1px solid var(--pm-border);
+}
+
+.pm-foot-row {
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11.5px;
+  color: var(--pm-text-3);
+}
+
+.pm-user {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+
+.pm-avatar {
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, oklch(72% 0.16 152), oklch(58% 0.14 152));
+  color: var(--pm-on-green);
+  font-size: 10px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.pm-email {
+  color: var(--pm-text-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pm-link {
+  background: transparent;
+  border: none;
+  color: var(--pm-text-2);
+  font-family: inherit;
+  font-size: 11.5px;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  padding: 0;
+}
+
+.pm-link:hover {
+  color: var(--pm-text);
+}
+
+.pm-sync-status {
+  font-size: 11px;
+  color: var(--pm-text-3);
+  margin-top: 8px;
+  min-height: 14px;
+}
+
+/* ── Sign-in placeholder ───────────────────────────────────── */
+.pm-signin {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 24px;
+  text-align: center;
+}
+
+.pm-signin-msg {
+  color: var(--pm-text-2);
+  font-size: 13px;
+  max-width: 260px;
+}
+
+.pm-signin-error {
+  color: oklch(65% 0.18 25);
+  font-size: 12px;
+}
+
+/* ── Modal ─────────────────────────────────────────────────── */
+.pm-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483646;
+  background: var(--pm-overlay);
+  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.pm-modal {
+  width: 100%;
+  max-width: 520px;
+  background: var(--pm-bg);
+  color: var(--pm-text);
+  border: 1px solid var(--pm-border);
+  border-radius: 14px;
+  box-shadow: var(--pm-shadow);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue",
+    system-ui, sans-serif;
+  font-size: 13px;
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 80px);
+  overflow: hidden;
+}
+
+.pm-modal-head {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--pm-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.pm-modal-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.2px;
+}
+
+.pm-modal-body {
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  overflow-y: auto;
+}
+
+.pm-modal-foot {
+  padding: 12px 20px;
+  border-top: 1px solid var(--pm-border);
+  background: var(--pm-footer-bg);
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.pm-input,
+.pm-textarea {
+  width: 100%;
+  background: var(--pm-input-bg);
+  border: 1px solid var(--pm-border);
+  border-radius: 8px;
+  color: var(--pm-text);
+  font-family: inherit;
+  font-size: 13px;
+  padding: 9px 12px;
+  outline: none;
+  transition: border-color 0.12s, box-shadow 0.12s;
+}
+
+.pm-textarea {
+  min-height: 110px;
+  resize: vertical;
+  line-height: 1.5;
+}
+
+.pm-input:focus,
+.pm-textarea:focus {
+  border-color: var(--pm-green);
+  box-shadow: 0 0 0 3px oklch(72% 0.16 152 / 0.18);
+}
+
+/* ── Trigger pill ──────────────────────────────────────────── */
+/* Lives outside .pm-sidebar (body-appended), so it carries its own
+ * adaptive palette. On dark hosts: light pill. On light hosts: dark pill.
+ * The host's prefers-color-scheme is the same signal we use for the panel,
+ * so the pill always reads against whatever surface it sits on. */
+.pm-pill {
+  --pp-bg: oklch(96% 0.005 95);
+  --pp-fg: oklch(20% 0.01 150);
+  --pp-kbd-bg: oklch(20% 0.01 150 / 0.08);
+  --pp-ring: 0 0 0 1px oklch(96% 0.005 95 / 0.15),
+    0 8px 24px oklch(0% 0 0 / 0.3);
+
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 9998;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px 8px 10px;
+  border-radius: 999px;
+  background: var(--pp-bg);
+  color: var(--pp-fg);
+  box-shadow: var(--pp-ring);
+  border: none;
+  cursor: pointer;
+  user-select: none;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue",
+    system-ui, sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+
+.pm-pill:hover {
+  transform: translateY(-1px);
+}
+
+@media (prefers-color-scheme: light) {
+  .pm-pill {
+    --pp-bg: oklch(20% 0.01 150);
+    --pp-fg: oklch(96% 0.005 95);
+    --pp-kbd-bg: oklch(96% 0.005 95 / 0.12);
+    --pp-ring: 0 0 0 1px oklch(20% 0.01 150 / 0.08),
+      0 8px 24px oklch(0% 0 0 / 0.08);
+  }
+}
+
+.pm-pill-logo {
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
+  background: oklch(72% 0.16 152);
+  color: oklch(16% 0.01 150);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.pm-pill-kbd {
+  font-size: 10px;
+  opacity: 0.6;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--pp-kbd-bg);
+  margin-left: 2px;
+  font-family: ui-monospace, SFMono-Regular, "Menlo", "Consolas", monospace;
+}
+
+.pm-pill.pm-hidden {
+  display: none;
+}
+
+/* ── Scrollbars (subtle, host-agnostic) ────────────────────── */
+.pm-list::-webkit-scrollbar,
+.pm-modal-body::-webkit-scrollbar {
+  width: 6px;
+}
+
+.pm-list::-webkit-scrollbar-thumb,
+.pm-modal-body::-webkit-scrollbar-thumb {
+  background: var(--pm-card-border);
+  border-radius: 3px;
+}
+
+.pm-list::-webkit-scrollbar-thumb:hover,
+.pm-modal-body::-webkit-scrollbar-thumb:hover {
+  background: var(--pm-text-3);
+}
