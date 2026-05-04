@@ -211,11 +211,20 @@ function writeCache(cache) {
   });
 }
 
+// Serialize cache mutations. Two concurrent saves (e.g. clicking Use while an
+// edit-save is in flight) used to read the same cache snapshot and the second
+// writeCache would clobber the first. The lock chains every mutation behind
+// the previous one so reads and writes can't interleave.
+let cacheLock = Promise.resolve();
 async function mutateCache(fn) {
-  const cache = await readCache();
-  const next = (await fn(cache)) || cache;
-  await writeCache(next);
-  return next;
+  const run = cacheLock.then(async () => {
+    const cache = await readCache();
+    const next = (await fn(cache)) || cache;
+    await writeCache(next);
+    return next;
+  });
+  cacheLock = run.catch(() => {});
+  return run;
 }
 
 export async function clearCache() {
@@ -311,9 +320,17 @@ async function reconcileFromDrive() {
   const cache = await readCache();
   const nextPrompts = { ...(cache.prompts || {}) };
 
-  // Evict cache entries whose Drive file is gone.
+  // Evict cache entries whose Drive file is gone — but never evict a prompt
+  // that has an in-flight optimistic write (`pending: true`) or that has no
+  // Drive file yet (`fileId == null`, e.g. an offline create still queued).
+  // Without this guard a reconcile can race a save and silently delete the
+  // user's prompt before the create/update lands on Drive.
   for (const promptId of Object.keys(nextPrompts)) {
-    if (!seen[promptId]) delete nextPrompts[promptId];
+    if (seen[promptId]) continue;
+    const entry = nextPrompts[promptId];
+    if (entry?.pending) continue;
+    if (!entry?.fileId) continue;
+    delete nextPrompts[promptId];
   }
 
   // Fetch content for new or changed entries.
@@ -453,13 +470,18 @@ export async function savePrompt(input) {
       });
       return promptId;
     }
-    // Hard failure — roll back optimistic insert if it was a brand-new prompt.
-    if (!existing) {
-      await mutateCache((c) => {
+    // Hard failure — fully roll back the optimistic write. For a brand-new
+    // prompt that means deleting it; for an update, restore the prior entry
+    // so the cache doesn't keep `pending: true` with the user's intended
+    // (but unsaved) edits and silently diverge from Drive forever.
+    await mutateCache((c) => {
+      if (!existing) {
         delete c.prompts[promptId];
-        return c;
-      });
-    }
+      } else {
+        c.prompts[promptId] = existing;
+      }
+      return c;
+    });
     throw err;
   }
 }
