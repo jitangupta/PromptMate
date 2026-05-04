@@ -43,8 +43,8 @@ export function isSignedIn() {
   return sendAuthMessage(AUTH_MESSAGE.isSignedIn);
 }
 
-export function refreshToken(badToken) {
-  return sendAuthMessage(AUTH_MESSAGE.refreshToken, { badToken });
+export function refreshToken() {
+  return sendAuthMessage(AUTH_MESSAGE.refreshToken);
 }
 
 export const AUTH_MESSAGE_TYPES = AUTH_MESSAGE;

@@ -61,10 +61,9 @@ async function driveFetch(url, options = {}, { retried = false } = {}) {
   const response = await fetch(url, { ...options, headers });
 
   if (response.status === 401 && !retried) {
-    // Drop the stale token from chrome.identity's cache and fetch a fresh one,
-    // then retry once. Without removing the cached copy, getToken would just
-    // hand back the same expired token.
-    await refreshToken(token);
+    // Ask the background to mint a fresh access token via the stored refresh
+    // token, then retry once.
+    await refreshToken();
     return driveFetch(url, options, { retried: true });
   }
 
