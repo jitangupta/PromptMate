@@ -51,3 +51,6 @@ promptmate-key.pem
 # Google OAuth client credentials download (not a real secret for Chrome extensions,
 # but Google's default filename pattern is alarming — keep out of the repo regardless)
 client_secret_*.json
+
+# OAuth client config injected at build time (see secrets.local.example.js)
+secrets.local.js
