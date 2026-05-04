@@ -21,6 +21,8 @@ import {
   performSignOut,
 } from "./sidebar-auth.js";
 
+import { showToast } from "./toast.js";
+
 (function initPromptMateIntegration() {
   const SIDEBAR_ID = "promptmate-sidebar";
   const PILL_ID = "promptmate-pill";
@@ -39,27 +41,6 @@ import {
   let lastPrompts = [];
   let lastMeta = null;
   let currentQuery = "";
-
-  // ⌘K / Ctrl+K — open the sidebar (if closed) and focus the search input.
-  // We always intercept on host pages because PromptMate owns this shortcut
-  // for prompt search; the host's own ⌘K is overridden while on chatgpt.com.
-  document.addEventListener("keydown", (e) => {
-    if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== "k") return;
-    e.preventDefault();
-    const sb = document.getElementById(SIDEBAR_ID);
-    const isOpen = sb && sb.classList.contains("pm-open");
-    if (!isOpen) toggleSidebar();
-    // Auth state subscription renders synchronously on subscribe, so the
-    // search input is in the DOM by the next frame. rAF is the right beat.
-    requestAnimationFrame(() => {
-      const input = document
-        .getElementById(SIDEBAR_ID)
-        ?.querySelector(".pm-search-input");
-      if (!input) return;
-      input.focus();
-      input.select();
-    });
-  });
 
   // ────────────────────────────────────────────────────────────
   // Sidebar shell
@@ -102,7 +83,6 @@ import {
     pill.innerHTML = `
       <span class="pm-pill-logo">P</span>
       <span>PromptMate</span>
-      <span class="pm-pill-kbd">⌘K</span>
     `;
     pill.addEventListener("click", toggleSidebar);
     document.body.appendChild(pill);
@@ -199,7 +179,6 @@ import {
         <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="6" cy="6" r="4"/><path d="M9.5 9.5L12 12"/></svg>
       </span>
       <input class="pm-search-input" type="search" placeholder="Search prompts…" />
-      <span class="pm-kbd pm-mono">⌘K</span>
     `;
     const input = wrap.querySelector(".pm-search-input");
     input.value = currentQuery;
@@ -645,14 +624,16 @@ import {
     const text = composePromptText(prompt);
     if (!insertIntoChatGPTInput(text)) {
       console.warn("PromptMate: could not locate ChatGPT input field");
+      showToast("Could not find ChatGPT input — try refreshing the page.");
       return;
     }
     recordAnalytics("used");
     incrementPromptUsed(prompt.promptId)
       .then(() => refreshPromptData())
-      .catch((err) =>
-        console.warn("PromptMate: increment used failed", err)
-      );
+      .catch((err) => {
+        console.warn("PromptMate: increment used failed", err);
+        showToast("Couldn't update usage count. Your prompt was inserted.");
+      });
   }
 
   function onCopy(prompt) {
@@ -663,7 +644,15 @@ import {
   function onTogglePin(prompt) {
     setPromptPinned(prompt.promptId, !prompt.pinned)
       .then(() => refreshPromptData())
-      .catch((err) => console.warn("PromptMate: pin toggle failed", err));
+      .catch((err) => {
+        console.warn("PromptMate: pin toggle failed", err);
+        showToast(
+          prompt.pinned
+            ? "Couldn't unpin prompt. Try again."
+            : "Couldn't pin prompt. Try again."
+        );
+        refreshPromptData();
+      });
   }
 
   function onDelete(prompt) {
@@ -673,7 +662,7 @@ import {
       .then(() => refreshPromptData())
       .catch((err) => {
         console.warn("PromptMate: delete failed", err);
-        alert("Failed to delete prompt. See console.");
+        showToast("Failed to delete prompt. Try again.");
       });
   }
 
@@ -755,7 +744,7 @@ import {
     const title = titleEl.value.trim();
     const body = bodyEl.value.trim();
     if (!title || !body) {
-      alert("Title and prompt body are required.");
+      showToast("Title and prompt body are required.", "info");
       return;
     }
 
@@ -778,7 +767,8 @@ import {
       })
       .catch((err) => {
         console.warn("PromptMate: save failed", err);
-        alert("Failed to save prompt. See console.");
+        showToast("Failed to save prompt. Try again.");
+        refreshPromptData();
       });
   }
 

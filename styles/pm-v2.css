@@ -740,3 +740,65 @@
 .pm-modal-body::-webkit-scrollbar-thumb:hover {
   background: var(--pm-text-3);
 }
+
+/* ── Toast ─────────────────────────────────────────────────── */
+.pm-toast-host {
+  position: fixed;
+  bottom: 16px;
+  right: 16px;
+  z-index: 2147483647;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: none;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue",
+    system-ui, sans-serif;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.pm-toast {
+  pointer-events: auto;
+  cursor: pointer;
+  max-width: 320px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: oklch(22% 0.008 150);
+  color: oklch(96% 0.005 95);
+  border: 1px solid oklch(30% 0.006 150);
+  box-shadow: 0 1px 2px oklch(0% 0 0 / 0.1), 0 8px 24px oklch(0% 0 0 / 0.25);
+  opacity: 0;
+  transform: translateX(8px);
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+.pm-toast.pm-toast-enter {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.pm-toast.pm-toast-leaving {
+  opacity: 0;
+  transform: translateX(8px);
+}
+
+.pm-toast-error {
+  border-color: oklch(58% 0.18 28);
+  background: oklch(28% 0.04 28);
+}
+
+.pm-toast-info {
+  border-color: oklch(40% 0.06 220);
+}
+
+@media (prefers-color-scheme: light) {
+  .pm-toast {
+    background: oklch(100% 0 0);
+    color: oklch(20% 0.01 150);
+    border-color: oklch(91% 0.005 95);
+  }
+  .pm-toast-error {
+    background: oklch(98% 0.02 28);
+    border-color: oklch(70% 0.15 28);
+  }
+}
