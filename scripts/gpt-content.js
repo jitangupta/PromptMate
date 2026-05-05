@@ -144,6 +144,7 @@ import { showToast } from "./toast.js";
     }
 
     sb.appendChild(buildSearch());
+    sb.appendChild(buildComposeDisclosure());
 
     const list = document.createElement("div");
     list.className = "pm-list";
@@ -192,28 +193,35 @@ import { showToast } from "./toast.js";
   function buildComposeDisclosure() {
     const details = document.createElement("details");
     details.className = "pm-compose";
+    if (!composePrefs.tone && !composePrefs.format) details.open = true;
 
     const summary = document.createElement("summary");
-    summary.textContent = "Compose options";
+    summary.textContent = "Tone & Format (optional)";
     details.appendChild(summary);
 
     const body = document.createElement("div");
     body.className = "pm-compose-body";
 
-    body.appendChild(buildSelect("pm-tone-pref", "Tone", TONE_OPTIONS, composePrefs.tone));
-    body.appendChild(buildSelect("pm-format-pref", "Format", FORMAT_OPTIONS, composePrefs.format));
+    const hint = document.createElement("p");
+    hint.className = "pm-compose-hint";
+    hint.textContent =
+      "Pick a tone and a format to steer the response. Their instructions are appended to your prompt when you click Use.";
+    body.appendChild(hint);
+
+    const tone = buildSelect("pm-tone-pref", "Tone", TONE_OPTIONS, composePrefs.tone);
+    const format = buildSelect("pm-format-pref", "Format", FORMAT_OPTIONS, composePrefs.format);
+    body.append(tone.wrap, format.wrap);
 
     details.appendChild(body);
 
-    const toneSel = body.querySelector("#pm-tone-pref");
-    const formatSel = body.querySelector("#pm-format-pref");
-
-    toneSel.addEventListener("change", () => {
-      composePrefs.tone = toneSel.value || null;
+    tone.select.addEventListener("change", () => {
+      composePrefs.tone = tone.select.value || null;
+      tone.updateInstruction(TONE_OPTIONS);
       setComposePrefs(composePrefs).catch(() => {});
     });
-    formatSel.addEventListener("change", () => {
-      composePrefs.format = formatSel.value || null;
+    format.select.addEventListener("change", () => {
+      composePrefs.format = format.select.value || null;
+      format.updateInstruction(FORMAT_OPTIONS);
       setComposePrefs(composePrefs).catch(() => {});
     });
 
@@ -257,8 +265,17 @@ import { showToast } from "./toast.js";
 
     if (currentValue) select.value = currentValue;
 
-    wrap.append(lbl, select);
-    return wrap;
+    const instructionEl = document.createElement("p");
+    instructionEl.className = "pm-compose-instruction";
+
+    const updateInstruction = (allOptions) => {
+      const match = allOptions.find((o) => o.option === select.value);
+      instructionEl.textContent = match?.instruction || "";
+    };
+    updateInstruction(options);
+
+    wrap.append(lbl, select, instructionEl);
+    return { wrap, select, updateInstruction };
   }
 
   function buildFooter(authState) {
@@ -560,8 +577,13 @@ import { showToast } from "./toast.js";
   }
 
   function composePromptText(prompt) {
-    const tone = TONE_OPTIONS.find((t) => t.option === composePrefs.tone) || prompt.tone;
-    const format = FORMAT_OPTIONS.find((f) => f.option === composePrefs.format) || prompt.format;
+    // Disclosure is the single source of truth. Legacy prompts can have
+    // `prompt.tone` / `prompt.format` stored as full {option, category,
+    // instruction} objects from older code; falling back to those would
+    // silently append instructions even when the user has cleared the
+    // selectors. Don't.
+    const tone = TONE_OPTIONS.find((t) => t.option === composePrefs.tone);
+    const format = FORMAT_OPTIONS.find((f) => f.option === composePrefs.format);
     const parts = [prompt.body || ""];
     if (tone?.instruction) parts.push("", tone.instruction);
     if (format?.instruction) parts.push(format.instruction);
@@ -596,18 +618,21 @@ import { showToast } from "./toast.js";
     }
 
     // contenteditable / ProseMirror — paste-event pattern.
+    // dispatchEvent returns false when a handler calls preventDefault(); for a
+    // paste this means ProseMirror read the clipboardData and inserted the
+    // text itself. Treating that as a failure (the previous logic) caused us
+    // to also run execCommand("insertText") and double-insert the prompt.
     selectAllContent(el);
     try {
       const dt = new DataTransfer();
       dt.setData("text/plain", text);
-      const pasted = el.dispatchEvent(
-        new ClipboardEvent("paste", {
-          clipboardData: dt,
-          bubbles: true,
-          cancelable: true,
-        })
-      );
-      if (pasted) return true;
+      const evt = new ClipboardEvent("paste", {
+        clipboardData: dt,
+        bubbles: true,
+        cancelable: true,
+      });
+      el.dispatchEvent(evt);
+      if (evt.defaultPrevented) return true;
     } catch (err) {
       console.warn("PromptMate: paste event failed, falling back to execCommand", err);
     }

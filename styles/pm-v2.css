@@ -220,7 +220,29 @@
   padding: 4px 12px 12px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
+}
+
+.pm-compose-hint {
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--pm-text-3);
+  margin: 0 0 2px;
+}
+
+.pm-compose-instruction {
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--pm-text-2);
+  background: var(--pm-bg);
+  border: 1px solid var(--pm-border);
+  border-radius: 6px;
+  padding: 6px 8px;
+  margin-top: 4px;
+}
+
+.pm-compose-instruction:empty {
+  display: none;
 }
 
 .pm-field-label {
