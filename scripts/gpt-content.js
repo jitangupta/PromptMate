@@ -321,6 +321,11 @@ import { showToast } from "./toast.js";
     const footer = document.createElement("footer");
     footer.className = "pm-footer";
 
+    const sync = document.createElement("div");
+    sync.className = "pm-sync-status";
+    sync.id = "pm-sync-status";
+    footer.appendChild(sync);
+
     const newBtn = document.createElement("button");
     newBtn.className = "pm-btn pm-btn-primary pm-btn-block";
     newBtn.type = "button";
@@ -354,11 +359,6 @@ import { showToast } from "./toast.js";
     row.appendChild(signOut);
 
     footer.appendChild(row);
-
-    const sync = document.createElement("div");
-    sync.className = "pm-sync-status";
-    sync.id = "pm-sync-status";
-    footer.appendChild(sync);
 
     return footer;
   }

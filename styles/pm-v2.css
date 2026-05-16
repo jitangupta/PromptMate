@@ -164,6 +164,12 @@
   font-size: 13px;
   font-family: inherit;
   min-width: 0;
+  padding: 0;
+  line-height: normal;
+}
+
+.pm-search-input:focus-visible, .pm-search-input:focus {
+  outline: none !important;
 }
 
 .pm-search-input::placeholder {
@@ -597,8 +603,8 @@
 .pm-sync-status {
   font-size: 11px;
   color: var(--pm-text-3);
-  margin-top: 8px;
-  min-height: 14px;
+  text-align: center;
+  margin-bottom: 6px;
 }
 
 /* ── Sign-in placeholder ───────────────────────────────────── */
