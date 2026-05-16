@@ -342,4 +342,28 @@ export async function importSharedPrompt(externalFileId) {
   return createPrivatePrompt(localPrompt);
 }
 
+// ---- Revision history (Task 06) ----
+
+export async function listRevisions(fileId) {
+  const params = new URLSearchParams({
+    fields: "revisions(id,modifiedTime,keepForever)",
+  });
+  const response = await driveFetch(
+    `${DRIVE_API}/files/${encodeURIComponent(fileId)}/revisions?${params}`,
+    { method: "GET" }
+  );
+  const json = await response.json();
+  // Drive returns oldest-first; reverse so callers see newest first.
+  return (json.revisions || []).reverse();
+}
+
+export async function readRevision(fileId, revisionId) {
+  const response = await driveFetch(
+    `${DRIVE_API}/files/${encodeURIComponent(fileId)}/revisions/${encodeURIComponent(revisionId)}?alt=media`,
+    { method: "GET" }
+  );
+  const content = await response.json();
+  return { content };
+}
+
 export { DriveConflictError, DriveError, FILE_SCHEMA_VERSION };

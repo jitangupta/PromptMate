@@ -671,6 +671,187 @@
   box-shadow: 0 0 0 3px oklch(72% 0.16 152 / 0.18);
 }
 
+/* ── Version history drawer ────────────────────────────────── */
+.pm-hist-head {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2px;
+}
+
+.pm-hist-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.pm-hist-subtitle {
+  font-size: 12px;
+  color: var(--pm-text-2);
+  margin: 2px 0 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pm-hist-note {
+  font-size: 11.5px;
+  color: var(--pm-text-3);
+  margin: 0 0 12px;
+  line-height: 1.45;
+}
+
+.pm-hist-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pm-hist-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--pm-card-border);
+  background: var(--pm-card);
+}
+
+.pm-hist-item-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.pm-hist-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.pm-hist-ts {
+  font-size: 12.5px;
+  color: var(--pm-text);
+}
+
+.pm-hist-badge {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: oklch(72% 0.16 152 / 0.15);
+  color: var(--pm-green);
+  flex-shrink: 0;
+}
+
+.pm-hist-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.pm-hist-toggle {
+  background: transparent;
+  border: none;
+  color: var(--pm-text-2);
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 5px;
+  white-space: nowrap;
+}
+
+.pm-hist-toggle:hover {
+  background: var(--pm-card-hover);
+  color: var(--pm-text);
+}
+
+.pm-hist-restore {
+  font-size: 12px;
+  padding: 5px 12px;
+  flex-shrink: 0;
+}
+
+.pm-hist-diff {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--pm-border);
+}
+
+.pm-hist-diff-wrap {
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.pm-hist-diff-same {
+  font-size: 12px;
+  color: var(--pm-text-3);
+  margin: 0;
+  font-style: italic;
+}
+
+.pm-hist-diff-section {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+
+.pm-hist-diff-section:last-child {
+  margin-bottom: 0;
+}
+
+.pm-hist-diff-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--pm-text-3);
+  font-family: ui-monospace, SFMono-Regular, "Menlo", "Consolas", monospace;
+}
+
+.pm-hist-diff-body {
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--pm-text-2);
+  background: var(--pm-bg);
+  border: 1px solid var(--pm-border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+del.pm-diff-del {
+  text-decoration: line-through;
+  background: oklch(45% 0.18 28 / 0.2);
+  color: oklch(75% 0.15 28);
+}
+
+ins.pm-diff-ins {
+  text-decoration: none;
+  background: oklch(55% 0.16 152 / 0.2);
+  color: var(--pm-green);
+}
+
+@media (prefers-color-scheme: light) {
+  del.pm-diff-del {
+    background: oklch(92% 0.05 28);
+    color: oklch(42% 0.18 28);
+  }
+  ins.pm-diff-ins {
+    background: oklch(90% 0.08 152);
+    color: var(--pm-green-deep);
+  }
+}
+
 /* ── Trigger pill ──────────────────────────────────────────── */
 /* Lives outside .pm-sidebar (body-appended), so it carries its own
  * adaptive palette. On dark hosts: light pill. On light hosts: dark pill.

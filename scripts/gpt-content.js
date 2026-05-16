@@ -12,6 +12,9 @@ import {
   setComposePrefs,
   setPromptPinned,
   incrementPromptUsed,
+  listPromptHistory,
+  restorePromptVersion,
+  getPromptRevisionContent,
 } from "./business.js";
 
 import {
@@ -527,6 +530,16 @@ import { showToast } from "./toast.js";
       openPromptModal(prompt);
     });
 
+    const hist = document.createElement("button");
+    hist.className = "pm-menu-item";
+    hist.type = "button";
+    hist.textContent = "History";
+    hist.addEventListener("click", (e) => {
+      e.stopPropagation();
+      menu.classList.remove("open");
+      openHistoryDrawer(prompt);
+    });
+
     const del = document.createElement("button");
     del.className = "pm-menu-item pm-danger";
     del.type = "button";
@@ -537,7 +550,7 @@ import { showToast } from "./toast.js";
       onDelete(prompt);
     });
 
-    menu.append(pin, copy, edit, del);
+    menu.append(pin, copy, edit, hist, del);
 
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
@@ -688,6 +701,293 @@ import { showToast } from "./toast.js";
       .catch((err) => {
         console.warn("PromptMate: delete failed", err);
         showToast("Failed to delete prompt. Try again.");
+      });
+  }
+
+  // ────────────────────────────────────────────────────────────
+  // Version history drawer
+  // ────────────────────────────────────────────────────────────
+  function formatRevDate(iso) {
+    return new Intl.DateTimeFormat(undefined, {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    }).format(new Date(iso));
+  }
+
+  function closeHistoryDrawer() {
+    const el = document.getElementById("pm-history-overlay");
+    if (el) el.remove();
+  }
+
+  // Word-level LCS diff. oldText = revision body, newText = current body.
+  // Returns tokens: { type: 'eq'|'del'|'ins', text: string }
+  // del = in old but not current (was removed), ins = in current but not old (was added).
+  function computeWordDiff(oldText, newText) {
+    const re = /\S+|\n|[^\S\n]+/g;
+    const a = oldText.match(re) || [];
+    const b = newText.match(re) || [];
+    const m = a.length, n = b.length;
+    if (m * n > 400_000) {
+      return [{ type: "del", text: oldText }, { type: "ins", text: newText }];
+    }
+    const dp = Array.from({ length: m + 1 }, () => new Int32Array(n + 1));
+    for (let i = m - 1; i >= 0; i--) {
+      for (let j = n - 1; j >= 0; j--) {
+        dp[i][j] = a[i] === b[j]
+          ? dp[i + 1][j + 1] + 1
+          : Math.max(dp[i + 1][j], dp[i][j + 1]);
+      }
+    }
+    const tokens = [];
+    let i = 0, j = 0;
+    while (i < m || j < n) {
+      if (i < m && j < n && a[i] === b[j]) {
+        tokens.push({ type: "eq", text: a[i] }); i++; j++;
+      } else if (j < n && (i >= m || dp[i][j + 1] >= dp[i + 1][j])) {
+        tokens.push({ type: "ins", text: b[j] }); j++;
+      } else {
+        tokens.push({ type: "del", text: a[i] }); i++;
+      }
+    }
+    return tokens;
+  }
+
+  function renderTokens(tokens, container) {
+    for (const tok of tokens) {
+      if (tok.type === "eq") {
+        container.appendChild(document.createTextNode(tok.text));
+      } else if (tok.type === "del") {
+        const el = document.createElement("del");
+        el.className = "pm-diff-del";
+        el.textContent = tok.text;
+        container.appendChild(el);
+      } else {
+        const el = document.createElement("ins");
+        el.className = "pm-diff-ins";
+        el.textContent = tok.text;
+        container.appendChild(el);
+      }
+    }
+  }
+
+  function buildDiffView(currentPrompt, oldContent) {
+    const wrap = document.createElement("div");
+    wrap.className = "pm-hist-diff-wrap";
+    const titleChanged = (oldContent.title ?? "") !== (currentPrompt.title ?? "");
+    const bodyChanged = (oldContent.body ?? "") !== (currentPrompt.body ?? "");
+    if (!titleChanged && !bodyChanged) {
+      const p = document.createElement("p");
+      p.className = "pm-hist-diff-same";
+      p.textContent = "No text changes in this revision.";
+      wrap.appendChild(p);
+      return wrap;
+    }
+    if (titleChanged) {
+      const sec = document.createElement("div");
+      sec.className = "pm-hist-diff-section";
+      const lbl = document.createElement("span");
+      lbl.className = "pm-hist-diff-label";
+      lbl.textContent = "Title";
+      const body = document.createElement("div");
+      body.className = "pm-hist-diff-body";
+      renderTokens(computeWordDiff(oldContent.title ?? "", currentPrompt.title ?? ""), body);
+      sec.append(lbl, body);
+      wrap.appendChild(sec);
+    }
+    if (bodyChanged) {
+      const sec = document.createElement("div");
+      sec.className = "pm-hist-diff-section";
+      const lbl = document.createElement("span");
+      lbl.className = "pm-hist-diff-label";
+      lbl.textContent = "Body";
+      const body = document.createElement("div");
+      body.className = "pm-hist-diff-body";
+      renderTokens(computeWordDiff(oldContent.body ?? "", currentPrompt.body ?? ""), body);
+      sec.append(lbl, body);
+      wrap.appendChild(sec);
+    }
+    return wrap;
+  }
+
+  function openHistoryDrawer(prompt) {
+    closeHistoryDrawer();
+
+    const overlay = document.createElement("div");
+    overlay.className = "pm-modal-overlay";
+    overlay.id = "pm-history-overlay";
+    overlay.addEventListener("click", (e) => {
+      if (e.target === overlay) closeHistoryDrawer();
+    });
+
+    const modal = document.createElement("div");
+    modal.className = "pm-modal";
+    modal.setAttribute("role", "dialog");
+
+    const head = document.createElement("div");
+    head.className = "pm-modal-head pm-hist-head";
+    head.innerHTML = `
+      <div class="pm-hist-title-row">
+        <h2 class="pm-modal-title">Version history</h2>
+        <button class="pm-iconbtn" type="button" aria-label="Close" data-pm-hist-close>
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M3 3l8 8M11 3l-8 8"/></svg>
+        </button>
+      </div>
+    `;
+    head.querySelector("[data-pm-hist-close]").addEventListener("click", closeHistoryDrawer);
+
+    const subtitle = document.createElement("p");
+    subtitle.className = "pm-hist-subtitle";
+    subtitle.textContent = prompt.title || "(untitled)";
+    head.appendChild(subtitle);
+
+    const body = document.createElement("div");
+    body.className = "pm-modal-body";
+
+    const loading = document.createElement("div");
+    loading.className = "pm-empty";
+    loading.textContent = "Loading history…";
+    body.appendChild(loading);
+
+    modal.append(head, body);
+    overlay.appendChild(modal);
+
+    const sb = document.getElementById(SIDEBAR_ID);
+    (sb || document.body).appendChild(overlay);
+
+    // Per-drawer cache of fetched revision content, keyed by revision ID.
+    const revContentCache = new Map();
+
+    listPromptHistory(prompt.promptId)
+      .then((revisions) => {
+        body.innerHTML = "";
+
+        if (!revisions.length) {
+          const empty = document.createElement("div");
+          empty.className = "pm-empty";
+          empty.textContent = "No revision history available yet.";
+          body.appendChild(empty);
+          return;
+        }
+
+        const note = document.createElement("p");
+        note.className = "pm-hist-note";
+        note.textContent = "Showing the 10 most recent revisions. Restoring creates a new revision.";
+        body.appendChild(note);
+
+        const list = document.createElement("ul");
+        list.className = "pm-hist-list";
+
+        revisions.slice(0, 10).forEach((rev, i) => {
+          const item = document.createElement("li");
+          item.className = "pm-hist-item";
+
+          // ── Main row (timestamp + actions) ──
+          const row = document.createElement("div");
+          row.className = "pm-hist-item-row";
+
+          const meta = document.createElement("div");
+          meta.className = "pm-hist-meta";
+
+          const ts = document.createElement("span");
+          ts.className = "pm-hist-ts";
+          ts.textContent = formatRevDate(rev.modifiedTime);
+          meta.appendChild(ts);
+
+          if (i === 0) {
+            const badge = document.createElement("span");
+            badge.className = "pm-hist-badge";
+            badge.textContent = "Current";
+            meta.appendChild(badge);
+          }
+
+          row.appendChild(meta);
+
+          if (i > 0) {
+            const actions = document.createElement("div");
+            actions.className = "pm-hist-actions";
+
+            // ── Diff expand/collapse ──
+            const diffEl = document.createElement("div");
+            diffEl.className = "pm-hist-diff";
+            diffEl.hidden = true;
+
+            const toggleBtn = document.createElement("button");
+            toggleBtn.className = "pm-hist-toggle";
+            toggleBtn.type = "button";
+            toggleBtn.textContent = "Show changes";
+
+            toggleBtn.addEventListener("click", async () => {
+              if (!diffEl.hidden) {
+                diffEl.hidden = true;
+                toggleBtn.textContent = "Show changes";
+                return;
+              }
+              diffEl.hidden = false;
+              toggleBtn.textContent = "Hide changes";
+              if (!revContentCache.has(rev.id)) {
+                diffEl.textContent = "Loading…";
+                try {
+                  const content = await getPromptRevisionContent(prompt.promptId, rev.id);
+                  revContentCache.set(rev.id, content);
+                } catch (err) {
+                  console.warn("PromptMate: fetch revision content failed", err);
+                  diffEl.textContent = err?.status === 404
+                    ? "This revision was purged by Drive (older than 30 days)."
+                    : err?.status === 403
+                    ? "This revision cannot be previewed."
+                    : "Could not load changes. Check your connection and try again.";
+                  return;
+                }
+              }
+              diffEl.innerHTML = "";
+              diffEl.appendChild(buildDiffView(prompt, revContentCache.get(rev.id)));
+            });
+
+            // ── Restore ──
+            const restoreBtn = document.createElement("button");
+            restoreBtn.className = "pm-btn pm-btn-secondary pm-hist-restore";
+            restoreBtn.type = "button";
+            restoreBtn.textContent = "Restore";
+            restoreBtn.addEventListener("click", () => {
+              if (!confirm(`Restore version from ${formatRevDate(rev.modifiedTime)}?`)) return;
+              restoreBtn.textContent = "Restoring…";
+              restoreBtn.disabled = true;
+              restorePromptVersion(prompt.promptId, rev.id)
+                .then(() => {
+                  closeHistoryDrawer();
+                  refreshPromptData();
+                  showToast("Prompt restored.");
+                })
+                .catch((err) => {
+                  console.warn("PromptMate: restore failed", err);
+                  restoreBtn.textContent = "Restore";
+                  restoreBtn.disabled = false;
+                  showToast("Failed to restore. Try again.");
+                });
+            });
+
+            actions.append(toggleBtn, restoreBtn);
+            row.appendChild(actions);
+            item.append(row, diffEl);
+          } else {
+            item.appendChild(row);
+          }
+
+          list.appendChild(item);
+        });
+
+        body.appendChild(list);
+      })
+      .catch((err) => {
+        console.warn("PromptMate: listPromptHistory failed", err);
+        body.innerHTML = "";
+        const errEl = document.createElement("div");
+        errEl.className = "pm-empty";
+        errEl.textContent = "Could not load history. Try again.";
+        body.appendChild(errEl);
       });
   }
 

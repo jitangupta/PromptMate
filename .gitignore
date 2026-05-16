@@ -54,3 +54,7 @@ client_secret_*.json
 
 # OAuth client config injected at build time (see secrets.local.example.js)
 secrets.local.js
+
+launch-video
+demos
+.npm-cache

@@ -712,6 +712,40 @@ export async function incrementPromptUsed(promptId) {
   return savePrompt({ ...existing, used: nextUsed });
 }
 
+// ---- Version history (Task 06) ----
+
+export async function listPromptHistory(promptId) {
+  const cache = await readCache();
+  const entry = cache.prompts?.[promptId];
+  if (!entry?.fileId) throw new Error(`PromptMate: no Drive file for prompt ${promptId}`);
+  return drive.listRevisions(entry.fileId);
+}
+
+export async function getPromptRevisionContent(promptId, revisionId) {
+  const cache = await readCache();
+  const entry = cache.prompts?.[promptId];
+  if (!entry?.fileId) throw new Error(`PromptMate: no Drive file for prompt ${promptId}`);
+  const { content } = await drive.readRevision(entry.fileId, revisionId);
+  return content;
+}
+
+export async function restorePromptVersion(promptId, revisionId) {
+  const cache = await readCache();
+  const entry = cache.prompts?.[promptId];
+  if (!entry?.fileId) throw new Error(`PromptMate: no Drive file for prompt ${promptId}`);
+  const { content } = await drive.readRevision(entry.fileId, revisionId);
+  return savePrompt({
+    promptId,
+    title: content.title ?? entry.title,
+    body: content.body ?? entry.body,
+    tone: content.tone ?? entry.tone ?? null,
+    format: content.format ?? entry.format ?? null,
+    pinned: entry.pinned,
+    used: entry.used,
+    createdAt: entry.createdAt,
+  });
+}
+
 // ---- Analytics (device-local, unchanged) ----
 
 export function recordAnalytics(action) {
