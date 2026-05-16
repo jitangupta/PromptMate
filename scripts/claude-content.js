@@ -15,6 +15,10 @@ import {
   listPromptHistory,
   restorePromptVersion,
   getPromptRevisionContent,
+  getOnboardingState,
+  dismissOnboardingGuide,
+  getWhatsNewState,
+  dismissWhatsNew,
 } from "./business.js";
 
 import {
@@ -34,6 +38,16 @@ import { showToast } from "./toast.js";
   let composePrefs = { tone: null, format: null };
   getComposePrefs().then((p) => {
     composePrefs = p;
+  });
+
+  let onboardingDismissed = false;
+  getOnboardingState().then((s) => {
+    onboardingDismissed = s.guideDismissed;
+  });
+
+  let whatsNewDismissed = false;
+  getWhatsNewState().then((s) => {
+    whatsNewDismissed = s.historyDismissed;
   });
 
   let lastPrompts = [];
@@ -134,6 +148,10 @@ import { showToast } from "./toast.js";
     }
 
     sb.appendChild(buildSearch());
+    const onboardingBanner = buildOnboardingBanner();
+    if (onboardingBanner) sb.appendChild(onboardingBanner);
+    const whatsNewBanner = buildWhatsNewBanner();
+    if (whatsNewBanner) sb.appendChild(whatsNewBanner);
     sb.appendChild(buildComposeDisclosure());
 
     const list = document.createElement("div");
@@ -159,6 +177,57 @@ import { showToast } from "./toast.js";
     `;
     wrap.querySelector("[data-pm-close]").addEventListener("click", toggleSidebar);
     return wrap;
+  }
+
+  function buildOnboardingBanner() {
+    if (onboardingDismissed) return null;
+    const banner = document.createElement("div");
+    banner.className = "pm-onboarding-banner";
+    banner.id = "pm-onboarding-banner";
+    banner.innerHTML = `
+      <div class="pm-onboarding-content">
+        <strong class="pm-onboarding-title">Welcome to PromptMate</strong>
+        <ol class="pm-onboarding-steps">
+          <li>Browse or search your saved prompts below</li>
+          <li>Click <strong>Use</strong> on any card to insert it into the chat</li>
+          <li>Click <strong>New prompt</strong> to create and save your own</li>
+        </ol>
+      </div>
+      <button class="pm-iconbtn pm-onboarding-dismiss" type="button" aria-label="Dismiss guide">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M2 2l10 10M12 2l-10 10"/></svg>
+      </button>
+    `;
+    banner.querySelector(".pm-onboarding-dismiss").addEventListener("click", () => {
+      onboardingDismissed = true;
+      dismissOnboardingGuide().catch(() => {});
+      const el = document.getElementById("pm-onboarding-banner");
+      if (el) el.remove();
+    });
+    return banner;
+  }
+
+  function buildWhatsNewBanner() {
+    if (whatsNewDismissed) return null;
+    const banner = document.createElement("div");
+    banner.className = "pm-whats-new-banner";
+    banner.id = "pm-whats-new-banner";
+    banner.innerHTML = `
+      <div class="pm-whats-new-content">
+        <span class="pm-whats-new-badge">New in v0.6.0</span>
+        <strong class="pm-whats-new-title">Prompt History</strong>
+        <p class="pm-whats-new-desc">Track changes to any prompt. Open the <strong>···</strong> menu on a card and select <strong>History</strong> to compare versions and restore a previous draft.</p>
+      </div>
+      <button class="pm-iconbtn pm-whats-new-dismiss" type="button" aria-label="Dismiss">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M2 2l10 10M12 2l-10 10"/></svg>
+      </button>
+    `;
+    banner.querySelector(".pm-whats-new-dismiss").addEventListener("click", () => {
+      whatsNewDismissed = true;
+      dismissWhatsNew().catch(() => {});
+      const el = document.getElementById("pm-whats-new-banner");
+      if (el) el.remove();
+    });
+    return banner;
   }
 
   function buildSearch() {
@@ -271,6 +340,11 @@ import { showToast } from "./toast.js";
     const footer = document.createElement("footer");
     footer.className = "pm-footer";
 
+    const sync = document.createElement("div");
+    sync.className = "pm-sync-status";
+    sync.id = "pm-sync-status";
+    footer.appendChild(sync);
+
     const newBtn = document.createElement("button");
     newBtn.className = "pm-btn pm-btn-primary pm-btn-block";
     newBtn.type = "button";
@@ -305,10 +379,14 @@ import { showToast } from "./toast.js";
 
     footer.appendChild(row);
 
-    const sync = document.createElement("div");
-    sync.className = "pm-sync-status";
-    sync.id = "pm-sync-status";
-    footer.appendChild(sync);
+    const requestLink = document.createElement("a");
+    requestLink.className = "pm-request-feature-link";
+    requestLink.href = "https://forms.gle/ripbRre2nCFcJ4hz6";
+    requestLink.target = "_blank";
+    requestLink.rel = "noopener noreferrer";
+    requestLink.textContent = "Request a feature";
+    footer.appendChild(requestLink);
+
     return footer;
   }
 

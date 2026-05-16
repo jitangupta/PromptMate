@@ -164,6 +164,12 @@
   font-size: 13px;
   font-family: inherit;
   min-width: 0;
+  padding: 0;
+  line-height: normal;
+}
+
+.pm-search-input:focus-visible, .pm-search-input:focus {
+  outline: none !important;
 }
 
 .pm-search-input::placeholder {
@@ -176,6 +182,97 @@
   padding: 2px 6px;
   border-radius: 4px;
   background: var(--pm-kbd-bg);
+}
+
+/* ── Onboarding banner ─────────────────────────────────────── */
+.pm-onboarding-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 0 18px 12px;
+  padding: 12px 14px;
+  background: oklch(72% 0.16 152 / 0.1);
+  border: 1px solid oklch(72% 0.16 152 / 0.35);
+  border-radius: 10px;
+}
+
+.pm-onboarding-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.pm-onboarding-title {
+  display: block;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--pm-green);
+  margin-bottom: 6px;
+}
+
+.pm-onboarding-steps {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: var(--pm-text-2);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.pm-onboarding-dismiss {
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+/* ── What's New banner ──────────────────────────────────────── */
+.pm-whats-new-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 0 18px 12px;
+  padding: 12px 14px;
+  background: oklch(55% 0.18 250 / 0.08);
+  border: 1px solid oklch(55% 0.18 250 / 0.35);
+  border-radius: 10px;
+}
+
+.pm-whats-new-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.pm-whats-new-badge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: oklch(55% 0.18 250);
+  background: oklch(55% 0.18 250 / 0.12);
+  border-radius: 4px;
+  padding: 1px 6px;
+  margin-bottom: 5px;
+}
+
+.pm-whats-new-title {
+  display: block;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--pm-text);
+  margin-bottom: 4px;
+}
+
+.pm-whats-new-desc {
+  margin: 0;
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: var(--pm-text-2);
+}
+
+.pm-whats-new-dismiss {
+  flex-shrink: 0;
+  margin-top: 1px;
 }
 
 /* ── Compose options disclosure ─────────────────────────────── */
@@ -553,11 +650,28 @@
   color: var(--pm-text);
 }
 
+.pm-request-feature-link {
+  display: block;
+  text-align: center;
+  font-size: 10.5px;
+  margin-top: 8px;
+  color: var(--pm-text-2);
+  text-decoration: none;
+  opacity: 0.7;
+  transition: opacity 0.15s;
+}
+
+.pm-request-feature-link:hover {
+  opacity: 1;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
 .pm-sync-status {
   font-size: 11px;
   color: var(--pm-text-3);
-  margin-top: 8px;
-  min-height: 14px;
+  text-align: center;
+  margin-bottom: 6px;
 }
 
 /* ── Sign-in placeholder ───────────────────────────────────── */

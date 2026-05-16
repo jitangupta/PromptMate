@@ -8,22 +8,26 @@ const AUTH_MESSAGE = {
 
 function sendAuthMessage(type, payload) {
   return new Promise((resolve, reject) => {
-    chrome.runtime.sendMessage({ type, ...payload }, (response) => {
-      const runtimeError = chrome.runtime.lastError;
-      if (runtimeError) {
-        reject(new Error(runtimeError.message));
-        return;
-      }
-      if (!response) {
-        reject(new Error("No response from background service worker"));
-        return;
-      }
-      if (response.error) {
-        reject(new Error(response.error));
-        return;
-      }
-      resolve(response.result);
-    });
+    try {
+      chrome.runtime.sendMessage({ type, ...payload }, (response) => {
+        const runtimeError = chrome.runtime.lastError;
+        if (runtimeError) {
+          reject(new Error(runtimeError.message));
+          return;
+        }
+        if (!response) {
+          reject(new Error("No response from background service worker"));
+          return;
+        }
+        if (response.error) {
+          reject(new Error(response.error));
+          return;
+        }
+        resolve(response.result);
+      });
+    } catch (err) {
+      reject(err);
+    }
   });
 }
 

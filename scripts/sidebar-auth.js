@@ -29,21 +29,33 @@ export function subscribeAuthState(fn) {
 
 function readCachedEmail() {
   return new Promise((resolve) => {
-    chrome.storage.local.get([EMAIL_CACHE_KEY], (res) =>
-      resolve(res?.[EMAIL_CACHE_KEY] || null)
-    );
+    try {
+      chrome.storage.local.get([EMAIL_CACHE_KEY], (res) =>
+        resolve(res?.[EMAIL_CACHE_KEY] || null)
+      );
+    } catch {
+      resolve(null);
+    }
   });
 }
 
 function writeCachedEmail(email) {
   return new Promise((resolve) => {
-    chrome.storage.local.set({ [EMAIL_CACHE_KEY]: email }, () => resolve());
+    try {
+      chrome.storage.local.set({ [EMAIL_CACHE_KEY]: email }, () => resolve());
+    } catch {
+      resolve();
+    }
   });
 }
 
 function clearCachedEmail() {
   return new Promise((resolve) => {
-    chrome.storage.local.remove([EMAIL_CACHE_KEY], () => resolve());
+    try {
+      chrome.storage.local.remove([EMAIL_CACHE_KEY], () => resolve());
+    } catch {
+      resolve();
+    }
   });
 }
 

@@ -756,3 +756,42 @@ export function recordAnalytics(action) {
   });
 }
 
+// ---- Onboarding state ----
+
+export const ONBOARDING_KEY = "promptmate.onboarding";
+
+export function getOnboardingState() {
+  return new Promise((resolve) =>
+    chrome.storage.local.get([ONBOARDING_KEY], (r) =>
+      resolve(r?.[ONBOARDING_KEY] || { seeded: false, guideDismissed: false })
+    )
+  );
+}
+
+export function dismissOnboardingGuide() {
+  return new Promise((resolve) =>
+    chrome.storage.local.get([ONBOARDING_KEY], (r) => {
+      const current = r?.[ONBOARDING_KEY] || {};
+      chrome.storage.local.set({ [ONBOARDING_KEY]: { ...current, guideDismissed: true } }, resolve);
+    })
+  );
+}
+
+// ---- What's New state ----
+
+export const WHATS_NEW_KEY = "promptmate.whatsNew";
+
+export function getWhatsNewState() {
+  return new Promise((resolve) =>
+    chrome.storage.local.get([WHATS_NEW_KEY], (r) =>
+      resolve(r?.[WHATS_NEW_KEY] || { historyDismissed: false })
+    )
+  );
+}
+
+export function dismissWhatsNew() {
+  return new Promise((resolve) =>
+    chrome.storage.local.set({ [WHATS_NEW_KEY]: { historyDismissed: true } }, resolve)
+  );
+}
+

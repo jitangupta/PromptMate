@@ -305,4 +305,37 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   return true;
 });
 
-chrome.runtime.onInstalled.addListener(() => {});
+// Keep these constants in sync with CACHE_KEY / ONBOARDING_KEY in scripts/business.js
+const _CACHE_KEY = "promptmate_cache";
+const _ONBOARDING_KEY = "promptmate.onboarding";
+
+async function seedOnboarding() {
+  const existing = await new Promise((resolve) =>
+    chrome.storage.local.get([_ONBOARDING_KEY], (r) => resolve(r[_ONBOARDING_KEY] || null))
+  );
+  if (existing?.seeded) return;
+
+  const cacheResult = await new Promise((resolve) =>
+    chrome.storage.local.get({ [_CACHE_KEY]: null }, (r) => resolve(r[_CACHE_KEY]))
+  );
+  const cache = cacheResult || { prompts: {}, visibleFolderId: null, lastSyncedAt: null, pendingWrites: [] };
+
+  if (Object.keys(cache.prompts || {}).length === 0) {
+    const now = Date.now();
+    const id1 = crypto.randomUUID();
+    const id2 = crypto.randomUUID();
+    const base = { fileId: null, etag: null, tier: "private", driveModifiedTime: null, pending: false, used: 0, tone: null, format: null };
+    cache.prompts[id1] = { ...base, promptId: id1, title: "Summarize this + extract action items", body: "Please summarize the key points from the above and list all action items or next steps as a numbered list.", pinned: true, createdAt: new Date(now).toISOString(), updatedAt: new Date(now).toISOString() };
+    cache.prompts[id2] = { ...base, promptId: id2, title: "Explain like I'm new to this", body: "Explain the above as if I'm encountering this topic for the first time. Use plain language, a concrete analogy, and a simple example.", pinned: false, createdAt: new Date(now + 1).toISOString(), updatedAt: new Date(now + 1).toISOString() };
+    await new Promise((resolve) => chrome.storage.local.set({ [_CACHE_KEY]: cache }, resolve));
+  }
+
+  await new Promise((resolve) =>
+    chrome.storage.local.set({ [_ONBOARDING_KEY]: { seeded: true, guideDismissed: false } }, resolve)
+  );
+}
+
+chrome.runtime.onInstalled.addListener((details) => {
+  if (details.reason !== "install") return;
+  seedOnboarding();
+});
