@@ -15,6 +15,8 @@ import {
   listPromptHistory,
   restorePromptVersion,
   getPromptRevisionContent,
+  getOnboardingState,
+  dismissOnboardingGuide,
 } from "./business.js";
 
 import {
@@ -37,6 +39,11 @@ import { showToast } from "./toast.js";
   let composePrefs = { tone: null, format: null };
   getComposePrefs().then((p) => {
     composePrefs = p;
+  });
+
+  let onboardingDismissed = false;
+  getOnboardingState().then((s) => {
+    onboardingDismissed = s.guideDismissed;
   });
 
   // Cached prompt fetch + search state. Keystrokes paint from the cache so
@@ -147,6 +154,8 @@ import { showToast } from "./toast.js";
     }
 
     sb.appendChild(buildSearch());
+    const onboardingBanner = buildOnboardingBanner();
+    if (onboardingBanner) sb.appendChild(onboardingBanner);
     sb.appendChild(buildComposeDisclosure());
 
     const list = document.createElement("div");
@@ -173,6 +182,33 @@ import { showToast } from "./toast.js";
     `;
     wrap.querySelector("[data-pm-close]").addEventListener("click", toggleSidebar);
     return wrap;
+  }
+
+  function buildOnboardingBanner() {
+    if (onboardingDismissed) return null;
+    const banner = document.createElement("div");
+    banner.className = "pm-onboarding-banner";
+    banner.id = "pm-onboarding-banner";
+    banner.innerHTML = `
+      <div class="pm-onboarding-content">
+        <strong class="pm-onboarding-title">Welcome to PromptMate</strong>
+        <ol class="pm-onboarding-steps">
+          <li>Browse or search your saved prompts below</li>
+          <li>Click <strong>Use</strong> on any card to insert it into the chat</li>
+          <li>Click <strong>New prompt</strong> to create and save your own</li>
+        </ol>
+      </div>
+      <button class="pm-iconbtn pm-onboarding-dismiss" type="button" aria-label="Dismiss guide">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M2 2l10 10M12 2l-10 10"/></svg>
+      </button>
+    `;
+    banner.querySelector(".pm-onboarding-dismiss").addEventListener("click", () => {
+      onboardingDismissed = true;
+      dismissOnboardingGuide().catch(() => {});
+      const el = document.getElementById("pm-onboarding-banner");
+      if (el) el.remove();
+    });
+    return banner;
   }
 
   function buildSearch() {

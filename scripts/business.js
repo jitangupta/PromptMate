@@ -756,3 +756,24 @@ export function recordAnalytics(action) {
   });
 }
 
+// ---- Onboarding state ----
+
+export const ONBOARDING_KEY = "promptmate.onboarding";
+
+export function getOnboardingState() {
+  return new Promise((resolve) =>
+    chrome.storage.local.get([ONBOARDING_KEY], (r) =>
+      resolve(r?.[ONBOARDING_KEY] || { seeded: false, guideDismissed: false })
+    )
+  );
+}
+
+export function dismissOnboardingGuide() {
+  return new Promise((resolve) =>
+    chrome.storage.local.get([ONBOARDING_KEY], (r) => {
+      const current = r?.[ONBOARDING_KEY] || {};
+      chrome.storage.local.set({ [ONBOARDING_KEY]: { ...current, guideDismissed: true } }, resolve);
+    })
+  );
+}
+

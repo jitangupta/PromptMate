@@ -20,6 +20,8 @@ jest.mock("../scripts/drive.js", () => ({
   makePrivateAgain: jest.fn(),
   importSharedPrompt: jest.fn(),
   ensureVisibleFolder: jest.fn(),
+  listRevisions: jest.fn(),
+  readRevision: jest.fn(),
   DriveConflictError: class DriveConflictError extends Error {
     constructor(fileId) {
       super(`conflict ${fileId}`);
@@ -225,5 +227,154 @@ describe("savePrompt rollback on hard failure", () => {
 
     const restored = readStoredCache().prompts.p1;
     expect(restored).toEqual(original);
+  });
+});
+
+// ─── Shared fixture for version history tests ─────────────────────────────────
+
+const syncedPrompt = {
+  promptId: "p1",
+  title: "Current Title",
+  body: "current body",
+  tone: null,
+  format: null,
+  pinned: true,
+  used: 3,
+  createdAt: "2026-01-01T00:00:00Z",
+  updatedAt: "2026-02-01T00:00:00Z",
+  fileId: "file-p1",
+  etag: "e1",
+  tier: "private",
+  driveModifiedTime: "2026-02-01T00:00:00Z",
+  pending: false,
+};
+
+const syncedCache = {
+  prompts: { p1: syncedPrompt },
+  pendingWrites: [],
+  lastSyncedAt: null,
+  visibleFolderId: null,
+};
+
+const localOnlyCache = {
+  prompts: {
+    local: {
+      promptId: "local",
+      title: "Local",
+      body: "x",
+      fileId: null,
+      etag: null,
+      tier: "private",
+      driveModifiedTime: null,
+      pending: false,
+    },
+  },
+  pendingWrites: [],
+  lastSyncedAt: null,
+  visibleFolderId: null,
+};
+
+// ─── Version history (feat(history): prompt version history with word-level diff) ───
+
+describe("listPromptHistory", () => {
+  it("throws when the prompt has no Drive file (local-only)", async () => {
+    seedCache(localOnlyCache);
+    await expect(business.listPromptHistory("local")).rejects.toThrow(
+      "no Drive file"
+    );
+  });
+
+  it("delegates to drive.listRevisions with the prompt's fileId", async () => {
+    seedCache(syncedCache);
+    const revisions = [{ id: "r1" }, { id: "r2" }];
+    drive.listRevisions.mockResolvedValue(revisions);
+
+    const result = await business.listPromptHistory("p1");
+
+    expect(result).toEqual(revisions);
+    expect(drive.listRevisions).toHaveBeenCalledWith("file-p1");
+  });
+});
+
+describe("getPromptRevisionContent", () => {
+  it("throws when the prompt has no Drive file (local-only)", async () => {
+    seedCache(localOnlyCache);
+    await expect(
+      business.getPromptRevisionContent("local", "r1")
+    ).rejects.toThrow("no Drive file");
+  });
+
+  it("returns the content object from the specified revision", async () => {
+    seedCache(syncedCache);
+    const content = { title: "Old Title", body: "old body", tone: null, format: null };
+    drive.readRevision.mockResolvedValue({ content });
+
+    const result = await business.getPromptRevisionContent("p1", "r1");
+
+    expect(result).toEqual(content);
+    expect(drive.readRevision).toHaveBeenCalledWith("file-p1", "r1");
+  });
+});
+
+describe("restorePromptVersion", () => {
+  it("throws when the prompt has no Drive file (local-only)", async () => {
+    seedCache(localOnlyCache);
+    await expect(
+      business.restorePromptVersion("local", "r1")
+    ).rejects.toThrow("no Drive file");
+  });
+
+  it("overwrites title and body from the revision while preserving pinned, used, and createdAt", async () => {
+    seedCache(syncedCache);
+    drive.readRevision.mockResolvedValue({
+      content: { title: "Restored Title", body: "restored body", tone: null, format: null },
+    });
+    drive.updatePrompt.mockResolvedValue({ fileId: "file-p1", etag: "e2" });
+
+    await business.restorePromptVersion("p1", "r2");
+
+    const saved = readStoredCache().prompts.p1;
+    expect(saved.title).toBe("Restored Title");
+    expect(saved.body).toBe("restored body");
+    expect(saved.pinned).toBe(true);
+    expect(saved.used).toBe(3);
+    expect(saved.createdAt).toBe("2026-01-01T00:00:00Z");
+  });
+});
+
+// ─── Onboarding state (feat: first-run onboarding) ───────────────────────────
+
+describe("getOnboardingState", () => {
+  it("returns default values when the key is absent from storage", async () => {
+    const state = await business.getOnboardingState();
+    expect(state).toEqual({ seeded: false, guideDismissed: false });
+  });
+
+  it("returns the stored state when the key exists", async () => {
+    globalThis.__pmStore.set("promptmate.onboarding", {
+      seeded: true,
+      guideDismissed: false,
+    });
+    const state = await business.getOnboardingState();
+    expect(state).toEqual({ seeded: true, guideDismissed: false });
+  });
+});
+
+describe("dismissOnboardingGuide", () => {
+  it("sets guideDismissed to true and preserves the seeded flag", async () => {
+    globalThis.__pmStore.set("promptmate.onboarding", {
+      seeded: true,
+      guideDismissed: false,
+    });
+    await business.dismissOnboardingGuide();
+    const stored = globalThis.__pmStore.get("promptmate.onboarding");
+    expect(stored.guideDismissed).toBe(true);
+    expect(stored.seeded).toBe(true);
+  });
+
+  it("creates the record with guideDismissed: true when key is absent", async () => {
+    await business.dismissOnboardingGuide();
+    const stored = globalThis.__pmStore.get("promptmate.onboarding");
+    expect(stored.guideDismissed).toBe(true);
   });
 });
