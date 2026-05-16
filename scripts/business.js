@@ -777,3 +777,21 @@ export function dismissOnboardingGuide() {
   );
 }
 
+// ---- What's New state ----
+
+export const WHATS_NEW_KEY = "promptmate.whatsNew";
+
+export function getWhatsNewState() {
+  return new Promise((resolve) =>
+    chrome.storage.local.get([WHATS_NEW_KEY], (r) =>
+      resolve(r?.[WHATS_NEW_KEY] || { historyDismissed: false })
+    )
+  );
+}
+
+export function dismissWhatsNew() {
+  return new Promise((resolve) =>
+    chrome.storage.local.set({ [WHATS_NEW_KEY]: { historyDismissed: true } }, resolve)
+  );
+}
+

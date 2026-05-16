@@ -225,6 +225,56 @@
   margin-top: 1px;
 }
 
+/* ── What's New banner ──────────────────────────────────────── */
+.pm-whats-new-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 0 18px 12px;
+  padding: 12px 14px;
+  background: oklch(55% 0.18 250 / 0.08);
+  border: 1px solid oklch(55% 0.18 250 / 0.35);
+  border-radius: 10px;
+}
+
+.pm-whats-new-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.pm-whats-new-badge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: oklch(55% 0.18 250);
+  background: oklch(55% 0.18 250 / 0.12);
+  border-radius: 4px;
+  padding: 1px 6px;
+  margin-bottom: 5px;
+}
+
+.pm-whats-new-title {
+  display: block;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--pm-text);
+  margin-bottom: 4px;
+}
+
+.pm-whats-new-desc {
+  margin: 0;
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: var(--pm-text-2);
+}
+
+.pm-whats-new-dismiss {
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
 /* ── Compose options disclosure ─────────────────────────────── */
 .pm-compose {
   margin: 0 18px 12px;
@@ -598,6 +648,23 @@
 
 .pm-link:hover {
   color: var(--pm-text);
+}
+
+.pm-request-feature-link {
+  display: block;
+  text-align: center;
+  font-size: 10.5px;
+  margin-top: 8px;
+  color: var(--pm-text-2);
+  text-decoration: none;
+  opacity: 0.7;
+  transition: opacity 0.15s;
+}
+
+.pm-request-feature-link:hover {
+  opacity: 1;
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
 .pm-sync-status {
