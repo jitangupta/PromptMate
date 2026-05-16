@@ -381,7 +381,7 @@ import { showToast } from "./toast.js";
 
     const requestLink = document.createElement("a");
     requestLink.className = "pm-request-feature-link";
-    requestLink.href = "https://forms.gle/PLACEHOLDER"; // TODO: replace with real Google Form URL
+    requestLink.href = "https://forms.gle/ripbRre2nCFcJ4hz6";
     requestLink.target = "_blank";
     requestLink.rel = "noopener noreferrer";
     requestLink.textContent = "Request a feature";
