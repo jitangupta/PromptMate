@@ -92,16 +92,12 @@
 }
 
 .pm-logo {
-  width: 22px;
-  height: 22px;
-  border-radius: 7px;
-  background: var(--pm-green);
-  color: var(--pm-on-green);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 700;
-  font-size: 13px;
+  width: 28px;
+  height: 28px;
+  display: block;
+  border-radius: 8px;
+  object-fit: contain;
+  flex: 0 0 auto;
 }
 
 .pm-brand-name {
@@ -1178,14 +1174,10 @@ ins.pm-diff-ins {
 .pm-pill-logo {
   width: 22px;
   height: 22px;
-  border-radius: 7px;
-  background: oklch(72% 0.16 152);
-  color: oklch(16% 0.01 150);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 700;
-  font-size: 13px;
+  display: block;
+  border-radius: 6px;
+  object-fit: contain;
+  flex: 0 0 auto;
 }
 
 .pm-pill-kbd {
