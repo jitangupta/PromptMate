@@ -39,6 +39,7 @@ import { copyToClipboard } from "./utility.js";
   const PILL_ID = "promptmate-pill";
   const SIDEBAR_WIDTH = 380;
   const COMPOSE_DISCLOSURE_STATE_KEY = "promptmate.composeDisclosureOpen";
+  const BRAND_ICON_URL = chrome.runtime.getURL("icons/icon128.png");
 
   let composePrefs = { tone: null, format: null };
   getComposePrefs().then((p) => {
@@ -95,7 +96,7 @@ import { copyToClipboard } from "./utility.js";
     pill.type = "button";
     pill.setAttribute("aria-label", "Open PromptMate");
     pill.innerHTML = `
-      <span class="pm-pill-logo">P</span>
+      <img class="pm-pill-logo" src="${BRAND_ICON_URL}" alt="" aria-hidden="true" />
       <span>PromptMate</span>
     `;
     pill.addEventListener("click", toggleSidebar);
@@ -182,7 +183,7 @@ import { copyToClipboard } from "./utility.js";
     wrap.className = "pm-header";
     wrap.innerHTML = `
       <div class="pm-brand">
-        <span class="pm-logo">P</span>
+        <img class="pm-logo" src="${BRAND_ICON_URL}" alt="" aria-hidden="true" />
         <span class="pm-brand-name">PromptMate</span>
       </div>
       <div class="pm-header-actions">

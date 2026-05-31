@@ -40,5 +40,11 @@
       "matches": ["*://claude.ai/*"],
       "js": ["dist/claude-content.bundle.js"]
     }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["icons/icon128.png"],
+      "matches": ["*://chatgpt.com/*", "*://claude.ai/*"]
+    }
   ]
 }
