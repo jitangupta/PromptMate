@@ -67,6 +67,8 @@ const emptyCache = () => ({
   pendingWrites: [],
 });
 
+const TRASH_RETENTION_DAYS = 30;
+
 function readCache() {
   return new Promise((resolve) => {
     chrome.storage.local.get({ [CACHE_KEY]: null }, (res) => {
@@ -128,6 +130,15 @@ function sortPromptsByCreation(entries) {
   });
 }
 
+export function purgeExpiredDeleted(prompts, retentionDays = TRASH_RETENTION_DAYS) {
+  const cutoff = Date.now() - retentionDays * 24 * 60 * 60 * 1000;
+  return prompts.filter((p) => {
+    if (!p?.deletedAt) return true;
+    const deletedAt = new Date(p.deletedAt).getTime();
+    return Number.isFinite(deletedAt) && deletedAt > cutoff;
+  });
+}
+
 // Backfill v2 fields on read so the UI never has to defend against undefined.
 // Persisted values win; missing values become safe defaults.
 function normalizePrompt(p) {
@@ -136,11 +147,20 @@ function normalizePrompt(p) {
     ...p,
     pinned: typeof p.pinned === "boolean" ? p.pinned : false,
     used: Number.isFinite(p.used) ? p.used : 0,
+    deletedAt: p.deletedAt || null,
   };
 }
 
 function promptsArray(cache) {
   return sortPromptsByCreation(Object.values(cache.prompts || {})).map(normalizePrompt);
+}
+
+function activePromptsArray(cache) {
+  return promptsArray(cache).filter((p) => !p.deletedAt);
+}
+
+function deletedPromptsArray(cache) {
+  return promptsArray(cache).filter((p) => !!p.deletedAt);
 }
 
 function metaFromCache(cache) {
@@ -152,16 +172,89 @@ function metaFromCache(cache) {
 
 // ---- Listing + reconcile ----
 
+let purgePromise = null;
+let reconcilePromise = null;
+
+async function purgeExpiredDeletedFromCache() {
+  const removed = [];
+  await mutateCache((c) => {
+    const prompts = c.prompts || {};
+    const kept = purgeExpiredDeleted(Object.values(prompts));
+    if (kept.length === Object.keys(prompts).length) return c;
+
+    const keepIds = new Set(kept.map((p) => p.promptId));
+    for (const [promptId, prompt] of Object.entries(prompts)) {
+      if (keepIds.has(promptId)) continue;
+      removed.push({ promptId, fileId: prompt.fileId || null });
+      delete prompts[promptId];
+    }
+    c.pendingWrites = (c.pendingWrites || []).filter(
+      (item) => !removed.some((removedItem) => removedItem.promptId === item.promptId)
+    );
+    return c;
+  });
+
+  for (const item of removed) {
+    if (!item.fileId) continue;
+    try {
+      await drive.deletePrompt(item.fileId);
+    } catch (err) {
+      if (isNetworkError(err)) {
+        await queuePendingWrite({ op: "delete", promptId: item.promptId, payload: { fileId: item.fileId } });
+      } else {
+        console.warn("PromptMate: failed to purge expired deleted prompt", item.promptId, err);
+      }
+    }
+  }
+}
+
+function purgeExpiredDeletedOnce() {
+  if (!purgePromise) {
+    purgePromise = purgeExpiredDeletedFromCache().finally(() => {
+      purgePromise = null;
+    });
+  }
+  return purgePromise;
+}
+
+function reconcileFromDriveOnce() {
+  if (!reconcilePromise) {
+    reconcilePromise = reconcileFromDrive()
+      .then(() => purgeExpiredDeletedOnce())
+      .then(() => readCache())
+      .finally(() => {
+        reconcilePromise = null;
+      });
+  }
+  return reconcilePromise;
+}
+
 export function listPrompts(callback) {
   if (typeof callback !== "function") callback = () => {};
 
-  readCache().then((cache) => {
-    callback(promptsArray(cache), { ...metaFromCache(cache), fromCache: true });
+  purgeExpiredDeletedOnce().then(() => readCache()).then((cache) => {
+    callback(activePromptsArray(cache), { ...metaFromCache(cache), fromCache: true });
   });
 
-  reconcileFromDrive()
+  reconcileFromDriveOnce()
     .then((cache) => {
-      callback(promptsArray(cache), { ...metaFromCache(cache), fromCache: false });
+      callback(activePromptsArray(cache), { ...metaFromCache(cache), fromCache: false });
+    })
+    .catch((err) => {
+      console.warn("PromptMate: background Drive sync failed", err);
+    });
+}
+
+export function listDeletedPrompts(callback) {
+  if (typeof callback !== "function") callback = () => {};
+
+  purgeExpiredDeletedOnce().then(() => readCache()).then((cache) => {
+    callback(deletedPromptsArray(cache), { ...metaFromCache(cache), fromCache: true });
+  });
+
+  reconcileFromDriveOnce()
+    .then((cache) => {
+      callback(deletedPromptsArray(cache), { ...metaFromCache(cache), fromCache: false });
     })
     .catch((err) => {
       console.warn("PromptMate: background Drive sync failed", err);
@@ -224,6 +317,7 @@ async function reconcileFromDrive() {
         used: Number.isFinite(content.used) ? content.used : 0,
         createdAt: content.createdAt ?? new Date().toISOString(),
         updatedAt: content.updatedAt ?? meta.modifiedTime ?? new Date().toISOString(),
+        deletedAt: content.deletedAt || null,
         fileId: meta.fileId,
         etag,
         tier: meta.tier,
@@ -255,6 +349,8 @@ function toDrivePayload(prompt) {
     pinned: prompt.pinned === true,
     used: Number.isFinite(prompt.used) ? prompt.used : 0,
     createdAt: prompt.createdAt,
+    updatedAt: prompt.updatedAt,
+    deletedAt: prompt.deletedAt || null,
   };
 }
 
@@ -298,6 +394,7 @@ export async function savePrompt(input) {
       : 0,
     createdAt: existing?.createdAt ?? input.createdAt ?? now,
     updatedAt: now,
+    deletedAt: input.deletedAt || null,
   };
 
   // Optimistic cache write.
@@ -356,13 +453,77 @@ export async function savePrompt(input) {
   }
 }
 
-export async function deletePrompt(promptId) {
+async function updatePromptDeletionState(promptId, deletedAt) {
+  const cache = await readCache();
+  const existing = cache.prompts[promptId];
+  if (!existing) return;
+
+  const previous = { ...existing };
+  const prompt = {
+    ...existing,
+    deletedAt: deletedAt || null,
+    updatedAt: new Date().toISOString(),
+  };
+
+  const optimistic = {
+    ...prompt,
+    pending: true,
+  };
+  await mutateCache((c) => {
+    c.prompts[promptId] = optimistic;
+    return c;
+  });
+
+  if (!existing.fileId) {
+    await mutateCache((c) => {
+      if (c.prompts[promptId]) c.prompts[promptId].pending = false;
+      return c;
+    });
+    return;
+  }
+
+  try {
+    const result = await performUpdate(existing.fileId, prompt, existing.etag);
+    await mutateCache((c) => {
+      if (c.prompts[promptId]) {
+        c.prompts[promptId] = {
+          ...optimistic,
+          fileId: result.fileId,
+          etag: result.etag,
+          pending: false,
+        };
+      }
+      return c;
+    });
+  } catch (err) {
+    if (isNetworkError(err)) {
+      await queuePendingWrite({ op: "update", promptId, payload: prompt });
+      return;
+    }
+    await mutateCache((c) => {
+      c.prompts[promptId] = previous;
+      return c;
+    });
+    throw err;
+  }
+}
+
+export function softDeletePrompt(promptId) {
+  return updatePromptDeletionState(promptId, new Date().toISOString());
+}
+
+export function restorePrompt(promptId) {
+  return updatePromptDeletionState(promptId, null);
+}
+
+export async function hardDeletePrompt(promptId) {
   const cache = await readCache();
   const entry = cache.prompts[promptId];
   if (!entry) return;
 
   await mutateCache((c) => {
     delete c.prompts[promptId];
+    c.pendingWrites = (c.pendingWrites || []).filter((item) => item.promptId !== promptId);
     return c;
   });
 
@@ -378,6 +539,8 @@ export async function deletePrompt(promptId) {
     throw err;
   }
 }
+
+export const deletePrompt = softDeletePrompt;
 
 // ---- Tier transitions (Task 07) ----
 
@@ -450,6 +613,7 @@ export async function importSharedPrompt(externalFileId) {
       used: Number.isFinite(content.used) ? content.used : 0,
       createdAt: content.createdAt ?? new Date().toISOString(),
       updatedAt: content.updatedAt ?? new Date().toISOString(),
+      deletedAt: content.deletedAt || null,
       fileId,
       etag,
       tier: "private",
@@ -627,11 +791,23 @@ export async function restorePromptVersion(promptId, revisionId) {
 // ---- Analytics (device-local, unchanged) ----
 
 export function recordAnalytics(action) {
-  chrome.storage.local.get(['analytics'], result => {
-    const analytics = result.analytics || { created: 0, used: 0, copied: 0, edited: 0, deleted: 0 };
-    analytics[action] = (analytics[action] || 0) + 1;
-    chrome.storage.local.set({ analytics });
-  });
+  try {
+    chrome.storage.local.get(["analytics"], (result) => {
+      if (chrome.runtime?.lastError) {
+        console.warn("PromptMate: analytics read skipped", chrome.runtime.lastError);
+        return;
+      }
+      const analytics = result.analytics || { created: 0, used: 0, copied: 0, edited: 0, deleted: 0 };
+      analytics[action] = (analytics[action] || 0) + 1;
+      chrome.storage.local.set({ analytics }, () => {
+        if (chrome.runtime?.lastError) {
+          console.warn("PromptMate: analytics write skipped", chrome.runtime.lastError);
+        }
+      });
+    });
+  } catch (err) {
+    console.warn("PromptMate: analytics skipped", err);
+  }
 }
 
 // ---- Onboarding state ----

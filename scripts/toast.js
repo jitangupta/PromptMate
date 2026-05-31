@@ -16,24 +16,41 @@ function ensureHost() {
   return host;
 }
 
-export function showToast(message, kind = "error") {
+export function showToast(message, kind = "error", options = {}) {
   if (!message) return;
   const host = ensureHost();
 
   const toast = document.createElement("div");
   toast.className = `pm-toast pm-toast-${kind}`;
   toast.setAttribute("role", "status");
-  toast.textContent = message;
+
+  const text = document.createElement("span");
+  text.textContent = message;
+  toast.appendChild(text);
 
   const dismiss = () => {
     if (!toast.isConnected) return;
     toast.classList.add("pm-toast-leaving");
     setTimeout(() => toast.remove(), 180);
   };
-  toast.addEventListener("click", dismiss);
+
+  if (options.actionLabel && typeof options.onAction === "function") {
+    const action = document.createElement("button");
+    action.className = "pm-toast-action";
+    action.type = "button";
+    action.textContent = options.actionLabel;
+    action.addEventListener("click", (e) => {
+      e.stopPropagation();
+      dismiss();
+      options.onAction();
+    });
+    toast.appendChild(action);
+  } else {
+    toast.addEventListener("click", dismiss);
+  }
 
   host.appendChild(toast);
   // Trigger enter transition on the next frame so the initial state paints first.
   requestAnimationFrame(() => toast.classList.add("pm-toast-enter"));
-  setTimeout(dismiss, 4000);
+  setTimeout(dismiss, options.duration ?? 4000);
 }

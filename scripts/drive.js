@@ -15,7 +15,7 @@ function fileNameFor(promptId) {
 
 function buildFileBody(prompt) {
   const now = new Date().toISOString();
-  return {
+  const body = {
     version: FILE_SCHEMA_VERSION,
     promptId: prompt.promptId,
     title: prompt.title ?? "",
@@ -25,8 +25,10 @@ function buildFileBody(prompt) {
     pinned: prompt.pinned === true,
     used: Number.isFinite(prompt.used) ? prompt.used : 0,
     createdAt: prompt.createdAt ?? now,
-    updatedAt: now,
+    updatedAt: prompt.updatedAt ?? now,
+    deletedAt: prompt.deletedAt || null,
   };
+  return body;
 }
 
 class DriveConflictError extends Error {
