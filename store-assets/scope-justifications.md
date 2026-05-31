@@ -4,7 +4,7 @@ Copy these into the Chrome Web Store listing ("Privacy practices" tab) and the G
 
 ## Single purpose (CWS + OAuth consent screen)
 
-> PromptMate lets users save reusable prompts and insert them into ChatGPT and Claude with one click. Prompts are stored in the user's own Google Drive so they follow the user across devices.
+> PromptMate lets users save reusable prompts and insert them into ChatGPT, Claude, and DeepSeek with one click. Prompts are stored in the user's own Google Drive so they follow the user across devices.
 
 ## Chrome Web Store — permission justifications
 
@@ -29,6 +29,10 @@ Field: **"Why is this permission necessary?"** next to each entry on the "Privac
 ### `claude.ai` host permission
 
 > Injects the PromptMate sidebar and header button into Claude, and writes the selected prompt into the Claude prompt input. Without this permission the extension cannot attach its UI to the page.
+
+### `chat.deepseek.com` host permission
+
+> Injects the PromptMate sidebar and floating button into DeepSeek, and writes the selected prompt into the DeepSeek prompt input. Without this permission the extension cannot attach its UI to the page.
 
 ## Google OAuth consent screen — scope justifications
 

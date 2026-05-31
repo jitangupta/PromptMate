@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "PromptMate",
-  "version": "0.6.1",
+  "version": "0.7.0",
   "description": "Your prompts. One click away.",
   "icons": {
     "16": "icons/icon16.png",
@@ -17,7 +17,8 @@
   ],
   "host_permissions": [
     "*://chatgpt.com/*",
-    "*://claude.ai/*"
+    "*://claude.ai/*",
+    "*://chat.deepseek.com/*"
   ],
   "action": {
     "default_popup": "popup/popup.html",
@@ -39,12 +40,16 @@
     {
       "matches": ["*://claude.ai/*"],
       "js": ["dist/claude-content.bundle.js"]
+    },
+    {
+      "matches": ["*://chat.deepseek.com/*"],
+      "js": ["dist/deepseek-content.bundle.js"]
     }
   ],
   "web_accessible_resources": [
     {
       "resources": ["icons/icon128.png"],
-      "matches": ["*://chatgpt.com/*", "*://claude.ai/*"]
+      "matches": ["*://chatgpt.com/*", "*://claude.ai/*", "*://chat.deepseek.com/*"]
     }
   ]
 }
