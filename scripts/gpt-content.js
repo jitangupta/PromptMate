@@ -1077,9 +1077,6 @@ import { showToast } from "./toast.js";
     const overlay = document.createElement("div");
     overlay.className = "pm-modal-overlay";
     overlay.id = "pm-modal-overlay";
-    overlay.addEventListener("click", (e) => {
-      if (e.target === overlay) closePromptModal();
-    });
 
     const modal = document.createElement("div");
     modal.className = "pm-modal";
@@ -1094,7 +1091,6 @@ import { showToast } from "./toast.js";
         <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M3 3l8 8M11 3l-8 8"/></svg>
       </button>
     `;
-    head.querySelector("[data-pm-modal-close]").addEventListener("click", closePromptModal);
 
     const body = document.createElement("div");
     body.className = "pm-modal-body";
@@ -1103,6 +1099,24 @@ import { showToast } from "./toast.js";
     const bodyField = makeField("pm-prompt-body", "Prompt body", "textarea", "Write your prompt here…");
     body.append(titleField.wrap, bodyField.wrap);
 
+    let initialState = { title: "", body: "" };
+    let lastActiveField = titleField.input;
+
+    const getCurrentState = () => ({
+      title: titleField.input.value,
+      body: bodyField.input.value,
+    });
+
+    const isDirty = () => {
+      const current = getCurrentState();
+      return current.title !== initialState.title || current.body !== initialState.body;
+    };
+
+    const focusLastActiveField = () => {
+      const field = document.contains(lastActiveField) ? lastActiveField : titleField.input;
+      field.focus();
+    };
+
     const foot = document.createElement("div");
     foot.className = "pm-modal-foot";
 
@@ -1110,7 +1124,6 @@ import { showToast } from "./toast.js";
     cancel.className = "pm-btn pm-btn-secondary";
     cancel.type = "button";
     cancel.textContent = "Cancel";
-    cancel.addEventListener("click", closePromptModal);
 
     const save = document.createElement("button");
     save.className = "pm-btn pm-btn-primary";
@@ -1118,7 +1131,64 @@ import { showToast } from "./toast.js";
     save.textContent = "Save";
     save.addEventListener("click", () => onSavePrompt(prompt));
 
-    foot.append(cancel, save);
+    const renderDefaultFooter = () => {
+      foot.classList.remove("pm-modal-foot-confirming");
+      foot.replaceChildren(cancel, save);
+    };
+
+    const showDiscardConfirmation = () => {
+      if (foot.classList.contains("pm-modal-foot-confirming")) {
+        focusLastActiveField();
+        return;
+      }
+
+      const message = document.createElement("span");
+      message.className = "pm-discard-message";
+      message.setAttribute("role", "alert");
+      message.textContent = "Discard unsaved changes?";
+
+      const actions = document.createElement("div");
+      actions.className = "pm-discard-actions";
+
+      const discard = document.createElement("button");
+      discard.className = "pm-btn pm-btn-secondary";
+      discard.type = "button";
+      discard.textContent = "Discard";
+      discard.addEventListener("click", closePromptModal);
+
+      const keep = document.createElement("button");
+      keep.className = "pm-btn pm-btn-primary";
+      keep.type = "button";
+      keep.textContent = "Keep editing";
+      keep.addEventListener("click", () => {
+        renderDefaultFooter();
+        focusLastActiveField();
+      });
+
+      actions.append(discard, keep);
+      foot.classList.add("pm-modal-foot-confirming");
+      foot.replaceChildren(message, actions);
+      focusLastActiveField();
+    };
+
+    const requestBackdropClosePromptModal = () => {
+      if (!isDirty()) {
+        closePromptModal();
+        return;
+      }
+
+      showDiscardConfirmation();
+    };
+
+    cancel.addEventListener("click", closePromptModal);
+    renderDefaultFooter();
+
+    overlay.addEventListener("click", (e) => {
+      if (e.target === overlay) requestBackdropClosePromptModal();
+    });
+
+    head.querySelector("[data-pm-modal-close]").addEventListener("click", closePromptModal);
+
     modal.append(head, body, foot);
     overlay.appendChild(modal);
 
@@ -1131,6 +1201,14 @@ import { showToast } from "./toast.js";
       bodyField.input.value = prompt.body || "";
       modal.dataset.editId = prompt.promptId;
     }
+
+    initialState = getCurrentState();
+    [titleField.input, bodyField.input].forEach((field) => {
+      field.addEventListener("focus", () => {
+        lastActiveField = field;
+      });
+      field.addEventListener("input", renderDefaultFooter);
+    });
 
     titleField.input.focus();
   }

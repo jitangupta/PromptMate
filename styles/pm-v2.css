@@ -759,6 +759,27 @@
   gap: 8px;
 }
 
+.pm-modal-foot-confirming {
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 12px;
+}
+
+.pm-discard-message {
+  color: var(--pm-text);
+  font-size: 13px;
+  margin-right: auto;
+}
+
+.pm-discard-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .pm-input,
 .pm-textarea {
   width: 100%;
