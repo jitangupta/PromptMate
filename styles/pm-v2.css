@@ -481,6 +481,14 @@
   min-height: 0;
 }
 
+.pm-insert-fallback-host {
+  padding: 0 18px 10px;
+}
+
+.pm-insert-fallback-host:empty {
+  display: none;
+}
+
 .pm-empty {
   padding: 32px 16px;
   text-align: center;
@@ -562,6 +570,33 @@
 .pm-card-foot.pm-trash-actions {
   justify-content: flex-start;
   flex-wrap: wrap;
+}
+
+.pm-insert-fallback {
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid oklch(70% 0.16 55 / 0.45);
+  border-radius: 8px;
+  background: oklch(42% 0.08 55 / 0.18);
+}
+
+.pm-insert-fallback-message {
+  margin: 0;
+  color: var(--pm-text);
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+
+.pm-insert-fallback-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.pm-insert-fallback-actions .pm-btn {
+  flex: 1;
 }
 
 .pm-used {

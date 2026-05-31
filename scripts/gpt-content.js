@@ -32,6 +32,7 @@ import {
 } from "./sidebar-auth.js";
 
 import { showToast } from "./toast.js";
+import { copyToClipboard } from "./utility.js";
 
 (function initPromptMateIntegration() {
   const SIDEBAR_ID = "promptmate-sidebar";
@@ -65,6 +66,7 @@ import { showToast } from "./toast.js";
   let lastMeta = null;
   let currentQuery = "";
   let currentView = "active";
+  let insertFailure = null;
 
   // ────────────────────────────────────────────────────────────
   // Sidebar shell
@@ -173,6 +175,11 @@ import { showToast } from "./toast.js";
     const whatsNewBanner = buildWhatsNewBanner();
     if (whatsNewBanner) sb.appendChild(whatsNewBanner);
     sb.appendChild(buildComposeDisclosure());
+
+    const insertFallbackHost = document.createElement("div");
+    insertFallbackHost.id = "pm-insert-fallback-host";
+    insertFallbackHost.className = "pm-insert-fallback-host";
+    sb.appendChild(insertFallbackHost);
 
     const list = document.createElement("div");
     list.className = "pm-list";
@@ -351,12 +358,14 @@ import { showToast } from "./toast.js";
       composePrefs.tone = tone.select.value || null;
       tone.updateInstruction(TONE_OPTIONS);
       updateSummary();
+      clearInsertFailure();
       setComposePrefs(composePrefs).catch(() => {});
     });
     format.select.addEventListener("change", () => {
       composePrefs.format = format.select.value || null;
       format.updateInstruction(FORMAT_OPTIONS);
       updateSummary();
+      clearInsertFailure();
       setComposePrefs(composePrefs).catch(() => {});
     });
     details.addEventListener("toggle", () => {
@@ -562,6 +571,7 @@ import { showToast } from "./toast.js";
     const listEl = document.getElementById("pm-list");
     if (!listEl) return;
     listEl.innerHTML = "";
+    paintInsertFailure();
 
     const meta = lastMeta;
     const prompts = currentView === "trash" ? lastDeletedPrompts : lastPrompts;
@@ -636,6 +646,14 @@ import { showToast } from "./toast.js";
     updateSyncIndicator(meta);
   }
 
+  function paintInsertFailure() {
+    const host = document.getElementById("pm-insert-fallback-host");
+    if (!host) return;
+    host.innerHTML = "";
+    if (!insertFailure) return;
+    host.appendChild(buildInsertFailureBanner(insertFailure.prompt, insertFailure.text));
+  }
+
   function buildCard(prompt) {
     const card = document.createElement("article");
     card.className = "pm-card";
@@ -684,6 +702,53 @@ import { showToast } from "./toast.js";
 
     card.appendChild(foot);
     return card;
+  }
+
+  function buildInsertFailureBanner(prompt, text) {
+    const banner = document.createElement("div");
+    banner.className = "pm-insert-fallback";
+
+    const message = document.createElement("p");
+    message.className = "pm-insert-fallback-message";
+    message.textContent =
+      "Looks like something has changed — we couldn't insert the prompt automatically. Use the Copy button to paste it manually.";
+    banner.appendChild(message);
+
+    const actions = document.createElement("div");
+    actions.className = "pm-insert-fallback-actions";
+
+    const copyBtn = document.createElement("button");
+    copyBtn.className = "pm-btn pm-btn-primary";
+    copyBtn.type = "button";
+    copyBtn.textContent = "Copy";
+    copyBtn.addEventListener("click", async () => {
+      const copied = await copyToClipboard(text);
+      if (!copied) {
+        showToast("Couldn't copy prompt. Try the copy menu again.");
+        return;
+      }
+      recordAnalytics("copied");
+      copyBtn.textContent = "Copied!";
+      setTimeout(() => {
+        copyBtn.textContent = "Copy";
+      }, 2000);
+    });
+
+    const dismissBtn = document.createElement("button");
+    dismissBtn.className = "pm-iconbtn";
+    dismissBtn.type = "button";
+    dismissBtn.setAttribute("aria-label", "Dismiss insert warning");
+    dismissBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 4l6 6M10 4l-6 6"/></svg>`;
+    dismissBtn.addEventListener("click", () => {
+      if (insertFailure?.promptId === prompt.promptId) {
+        insertFailure = null;
+        paintList();
+      }
+    });
+
+    actions.append(copyBtn, dismissBtn);
+    banner.appendChild(actions);
+    return banner;
   }
 
   function buildTrashCard(prompt) {
@@ -821,13 +886,19 @@ import { showToast } from "./toast.js";
   // with a DataTransfer is what ProseMirror actually listens to. Same trick
   // Claude needs.
   // ────────────────────────────────────────────────────────────
+  const CHATGPT_INPUT_SELECTORS = [
+    'div.ProseMirror[contenteditable="true"]',
+    '[contenteditable="true"]#prompt-textarea',
+    "#prompt-textarea",
+    'textarea[name="prompt-textarea"]',
+  ];
+
   function findChatGPTInput() {
-    return (
-      document.querySelector('div.ProseMirror[contenteditable="true"]') ||
-      document.querySelector('[contenteditable="true"]#prompt-textarea') ||
-      document.getElementById("prompt-textarea") ||
-      document.querySelector('textarea[name="prompt-textarea"]')
-    );
+    for (const selector of CHATGPT_INPUT_SELECTORS) {
+      const el = document.querySelector(selector);
+      if (el) return { el, selector };
+    }
+    return { el: null, selector: CHATGPT_INPUT_SELECTORS.join(", ") };
   }
 
   function composePromptText(prompt) {
@@ -853,59 +924,71 @@ import { showToast } from "./toast.js";
   }
 
   function insertIntoChatGPTInput(text) {
-    const el = findChatGPTInput();
-    if (!el) return false;
-
-    el.focus();
-
-    // Real <textarea> fallback — set value and fire input so React's
-    // onChange handlers see it. Modern ChatGPT doesn't render this, but
-    // a future revert wouldn't break us.
-    if (el.tagName === "TEXTAREA") {
-      const setter = Object.getOwnPropertyDescriptor(
-        window.HTMLTextAreaElement.prototype,
-        "value"
-      ).set;
-      setter.call(el, text);
-      el.dispatchEvent(new Event("input", { bubbles: true }));
-      return true;
-    }
-
-    // contenteditable / ProseMirror — paste-event pattern.
-    // dispatchEvent returns false when a handler calls preventDefault(); for a
-    // paste this means ProseMirror read the clipboardData and inserted the
-    // text itself. Treating that as a failure (the previous logic) caused us
-    // to also run execCommand("insertText") and double-insert the prompt.
-    selectAllContent(el);
+    let attemptedSelector = CHATGPT_INPUT_SELECTORS.join(", ");
     try {
-      const dt = new DataTransfer();
-      dt.setData("text/plain", text);
-      const evt = new ClipboardEvent("paste", {
-        clipboardData: dt,
-        bubbles: true,
-        cancelable: true,
+      const { el, selector } = findChatGPTInput();
+      attemptedSelector = selector;
+      if (!el) throw new Error("Input selector not found");
+
+      el.focus();
+
+      // Real <textarea> fallback — set value and fire input so React's
+      // onChange handlers see it. Modern ChatGPT doesn't render this, but
+      // a future revert wouldn't break us.
+      if (el.tagName === "TEXTAREA") {
+        const setter = Object.getOwnPropertyDescriptor(
+          window.HTMLTextAreaElement.prototype,
+          "value"
+        ).set;
+        setter.call(el, text);
+        el.dispatchEvent(new Event("input", { bubbles: true }));
+        return { success: true };
+      }
+
+      // contenteditable / ProseMirror — paste-event pattern.
+      // dispatchEvent returns false when a handler calls preventDefault(); for a
+      // paste this means ProseMirror read the clipboardData and inserted the
+      // text itself. Treating that as a failure (the previous logic) caused us
+      // to also run execCommand("insertText") and double-insert the prompt.
+      selectAllContent(el);
+      try {
+        const dt = new DataTransfer();
+        dt.setData("text/plain", text);
+        const evt = new ClipboardEvent("paste", {
+          clipboardData: dt,
+          bubbles: true,
+          cancelable: true,
+        });
+        el.dispatchEvent(evt);
+        if (evt.defaultPrevented) return { success: true };
+      } catch (err) {
+        console.warn("PromptMate: paste event failed, falling back to execCommand", err);
+      }
+
+      if (document.execCommand("insertText", false, text)) {
+        return { success: true };
+      }
+      throw new Error("execCommand insertText returned false");
+    } catch (err) {
+      console.warn("[PromptMate] Insert failed:", {
+        host: "chatgpt",
+        selector: attemptedSelector,
+        error: err,
       });
-      el.dispatchEvent(evt);
-      if (evt.defaultPrevented) return true;
-    } catch (err) {
-      console.warn("PromptMate: paste event failed, falling back to execCommand", err);
-    }
-
-    try {
-      return document.execCommand("insertText", false, text);
-    } catch (err) {
-      console.warn("PromptMate: execCommand insertText failed", err);
-      return false;
+      return { success: false, error: err?.message || String(err) };
     }
   }
 
   function onUse(prompt) {
     const text = composePromptText(prompt);
-    if (!insertIntoChatGPTInput(text)) {
-      console.warn("PromptMate: could not locate ChatGPT input field");
-      showToast("Could not find ChatGPT input — try refreshing the page.");
+    const result = insertIntoChatGPTInput(text);
+    if (!result.success) {
+      insertFailure = { promptId: prompt.promptId, prompt, text };
+      paintList();
+      showToast("PromptMate couldn't insert automatically. Use Copy in the sidebar.");
       return;
     }
+    clearInsertFailure();
     recordAnalytics("used");
     incrementPromptUsed(prompt.promptId)
       .then(() => refreshPromptData())
@@ -916,8 +999,15 @@ import { showToast } from "./toast.js";
   }
 
   function onCopy(prompt) {
-    recordAnalytics("copied");
-    navigator.clipboard.writeText(composePromptText(prompt)).catch(() => {});
+    copyToClipboard(composePromptText(prompt)).then((copied) => {
+      if (copied) recordAnalytics("copied");
+    });
+  }
+
+  function clearInsertFailure() {
+    if (!insertFailure) return;
+    insertFailure = null;
+    paintList();
   }
 
   function onTogglePin(prompt) {
@@ -1421,7 +1511,12 @@ import { showToast } from "./toast.js";
       field.addEventListener("focus", () => {
         lastActiveField = field;
       });
-      field.addEventListener("input", renderDefaultFooter);
+      field.addEventListener("input", () => {
+        renderDefaultFooter();
+        if (field === bodyField.input && insertFailure?.promptId === prompt?.promptId) {
+          clearInsertFailure();
+        }
+      });
     });
 
     titleField.input.focus();
