@@ -4,8 +4,11 @@ import {
   TONE_OPTIONS,
   FORMAT_OPTIONS,
   listPrompts,
+  listDeletedPrompts,
   savePrompt,
-  deletePrompt,
+  softDeletePrompt,
+  restorePrompt,
+  hardDeletePrompt,
   drainPendingWrites,
   recordAnalytics,
   getComposePrefs,
@@ -53,8 +56,10 @@ import { showToast } from "./toast.js";
   });
 
   let lastPrompts = [];
+  let lastDeletedPrompts = [];
   let lastMeta = null;
   let currentQuery = "";
+  let currentView = "active";
 
   // ────────────────────────────────────────────────────────────
   // Sidebar shell
@@ -173,12 +178,58 @@ import { showToast } from "./toast.js";
         <span class="pm-logo">P</span>
         <span class="pm-brand-name">PromptMate</span>
       </div>
-      <button class="pm-iconbtn" type="button" aria-label="Close" data-pm-close>
-        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M3 3l8 8M11 3l-8 8"/></svg>
-      </button>
+      <div class="pm-header-actions">
+        <div class="pm-settings-wrap">
+          <button class="pm-iconbtn ${currentView === "trash" ? "pm-active" : ""}" type="button" aria-label="PromptMate settings" title="Settings" data-pm-settings>
+            <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.5" cy="7.5" r="2.1"/><path d="M7.5 1.8v1.4M7.5 11.8v1.4M3.45 3.45l1 1M10.55 10.55l1 1M1.8 7.5h1.4M11.8 7.5h1.4M3.45 11.55l1-1M10.55 4.45l1-1"/></svg>
+          </button>
+          <div class="pm-settings-menu" data-pm-settings-menu>
+            <button class="pm-settings-item ${currentView === "trash" ? "pm-active" : ""}" type="button" data-pm-recently-deleted>
+              <span class="pm-settings-item-icon">
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 4h9"/><path d="M5 4V2.5h4V4"/><path d="M4 4.5l.4 7h5.2l.4-7"/></svg>
+              </span>
+              <span>${currentView === "trash" ? "Prompt library" : "Recently deleted"}</span>
+            </button>
+          </div>
+        </div>
+        <button class="pm-iconbtn" type="button" aria-label="Close" data-pm-close>
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M3 3l8 8M11 3l-8 8"/></svg>
+        </button>
+      </div>
     `;
+    const settingsWrap = wrap.querySelector(".pm-settings-wrap");
+    const settingsMenu = wrap.querySelector("[data-pm-settings-menu]");
+    wrap.querySelector("[data-pm-settings]").addEventListener("click", (e) => {
+      e.stopPropagation();
+      settingsMenu.classList.toggle("open");
+    });
+    wrap.querySelector("[data-pm-recently-deleted]").addEventListener("click", () => {
+      currentView = currentView === "trash" ? "active" : "trash";
+      currentQuery = "";
+      const search = document.querySelector(".pm-search-input");
+      if (search) search.value = "";
+      settingsMenu.classList.remove("open");
+      syncSettingsUi();
+      refreshPromptData();
+    });
+    document.addEventListener("click", (e) => {
+      if (!settingsWrap.contains(e.target)) settingsMenu.classList.remove("open");
+    });
     wrap.querySelector("[data-pm-close]").addEventListener("click", toggleSidebar);
     return wrap;
+  }
+
+  function syncSettingsUi() {
+    const btn = document.querySelector("[data-pm-settings]");
+    if (!btn) return;
+    const showingTrash = currentView === "trash";
+    btn.classList.toggle("pm-active", showingTrash);
+    const item = document.querySelector("[data-pm-recently-deleted]");
+    if (item) {
+      item.classList.toggle("pm-active", showingTrash);
+      const label = item.querySelector("span:last-child");
+      if (label) label.textContent = showingTrash ? "Prompt library" : "Recently deleted";
+    }
   }
 
   function buildOnboardingBanner() {
@@ -461,6 +512,15 @@ import { showToast } from "./toast.js";
   // Prompt list + cards
   // ────────────────────────────────────────────────────────────
   function refreshPromptData() {
+    if (currentView === "trash") {
+      listDeletedPrompts((prompts, meta) => {
+        lastDeletedPrompts = prompts;
+        lastMeta = meta;
+        paintList();
+      });
+      return;
+    }
+
     listPrompts((prompts, meta) => {
       lastPrompts = prompts;
       lastMeta = meta;
@@ -476,18 +536,29 @@ import { showToast } from "./toast.js";
     });
   }
 
+  function sortByDeletion(arr) {
+    return arr.slice().sort((a, b) => {
+      const ax = a.deletedAt || "";
+      const bx = b.deletedAt || "";
+      return ax < bx ? 1 : ax > bx ? -1 : 0;
+    });
+  }
+
   function paintList() {
     const listEl = document.getElementById("pm-list");
     if (!listEl) return;
     listEl.innerHTML = "";
 
     const meta = lastMeta;
-    const prompts = lastPrompts;
+    const prompts = currentView === "trash" ? lastDeletedPrompts : lastPrompts;
 
     if (!prompts.length) {
       const empty = document.createElement("div");
       empty.className = "pm-empty";
-      empty.textContent = "No prompts yet. Click “New prompt” below to create one.";
+      empty.textContent =
+        currentView === "trash"
+          ? "No deleted prompts."
+          : "No prompts yet. Click “New prompt” below to create one.";
       listEl.appendChild(empty);
       updateSyncIndicator(meta);
       return;
@@ -510,8 +581,20 @@ import { showToast } from "./toast.js";
         empty.textContent = `No prompts match “${currentQuery.trim()}”.`;
         listEl.appendChild(empty);
       } else {
-        sortByRecency(matches).forEach((p) => listEl.appendChild(buildCard(p)));
+        sortByRecency(matches).forEach((p) =>
+          listEl.appendChild(currentView === "trash" ? buildTrashCard(p) : buildCard(p))
+        );
       }
+      updateSyncIndicator(meta);
+      return;
+    }
+
+    if (currentView === "trash") {
+      const lbl = document.createElement("div");
+      lbl.className = "pm-section-label";
+      lbl.textContent = "Trash";
+      listEl.appendChild(lbl);
+      sortByDeletion(prompts).forEach((p) => listEl.appendChild(buildTrashCard(p)));
       updateSyncIndicator(meta);
       return;
     }
@@ -584,6 +667,48 @@ import { showToast } from "./toast.js";
       used.textContent = `${prompt.used}×`;
       foot.appendChild(used);
     }
+
+    card.appendChild(foot);
+    return card;
+  }
+
+  function buildTrashCard(prompt) {
+    const card = document.createElement("article");
+    card.className = "pm-card";
+
+    const head = document.createElement("div");
+    head.className = "pm-card-head";
+
+    const titleWrap = document.createElement("div");
+    titleWrap.className = "pm-card-title-wrap";
+    const title = document.createElement("span");
+    title.className = "pm-card-title";
+    title.textContent = prompt.title || "(untitled)";
+    titleWrap.appendChild(title);
+    head.appendChild(titleWrap);
+    card.appendChild(head);
+
+    const meta = document.createElement("p");
+    meta.className = "pm-trash-meta";
+    meta.textContent = formatDeletedMeta(prompt.deletedAt);
+    card.appendChild(meta);
+
+    const foot = document.createElement("div");
+    foot.className = "pm-card-foot pm-trash-actions";
+
+    const restoreBtn = document.createElement("button");
+    restoreBtn.className = "pm-btn pm-btn-primary";
+    restoreBtn.type = "button";
+    restoreBtn.textContent = "Restore";
+    restoreBtn.addEventListener("click", () => onRestoreDeleted(prompt));
+    foot.appendChild(restoreBtn);
+
+    const deleteBtn = document.createElement("button");
+    deleteBtn.className = "pm-btn pm-btn-danger";
+    deleteBtn.type = "button";
+    deleteBtn.textContent = "Delete forever";
+    deleteBtn.addEventListener("click", () => onHardDelete(prompt));
+    foot.appendChild(deleteBtn);
 
     card.appendChild(foot);
     return card;
@@ -775,14 +900,63 @@ import { showToast } from "./toast.js";
   }
 
   function onDelete(prompt) {
-    if (!confirm(`Delete "${prompt.title}"?`)) return;
     recordAnalytics("deleted");
-    deletePrompt(prompt.promptId)
-      .then(() => refreshPromptData())
+    softDeletePrompt(prompt.promptId)
+      .then(() => {
+        refreshPromptData();
+        showToast("Prompt deleted", "info", {
+          actionLabel: "Undo",
+          duration: 5000,
+          onAction: () =>
+            restorePrompt(prompt.promptId)
+              .then(() => refreshPromptData())
+              .catch((err) => {
+                console.warn("PromptMate: undo delete failed", err);
+                showToast("Couldn't restore prompt. Open Trash to try again.");
+              }),
+        });
+      })
       .catch((err) => {
         console.warn("PromptMate: delete failed", err);
         showToast("Failed to delete prompt. Try again.");
       });
+  }
+
+  function onRestoreDeleted(prompt) {
+    restorePrompt(prompt.promptId)
+      .then(() => {
+        refreshPromptData();
+        showToast("Prompt restored.", "info");
+      })
+      .catch((err) => {
+        console.warn("PromptMate: restore deleted failed", err);
+        showToast("Failed to restore. Try again.");
+      });
+  }
+
+  function onHardDelete(prompt) {
+    if (!confirm(`Permanently delete "${prompt.title}"? This can't be undone.`)) return;
+    hardDeletePrompt(prompt.promptId)
+      .then(() => refreshPromptData())
+      .catch((err) => {
+        console.warn("PromptMate: permanent delete failed", err);
+        showToast("Failed to delete forever. Try again.");
+      });
+  }
+
+  function formatDeletedMeta(deletedAt) {
+    const deletedTime = new Date(deletedAt).getTime();
+    if (!Number.isFinite(deletedTime)) return "Expiration unknown";
+    const dayMs = 24 * 60 * 60 * 1000;
+    const elapsedDays = Math.max(0, Math.floor((Date.now() - deletedTime) / dayMs));
+    const remainingDays = Math.max(0, 30 - elapsedDays);
+    const deletedLabel =
+      elapsedDays === 0
+        ? "Deleted today"
+        : `Deleted ${elapsedDays} day${elapsedDays === 1 ? "" : "s"} ago`;
+    const expiresLabel =
+      remainingDays === 1 ? "expires in 1 day" : `expires in ${remainingDays} days`;
+    return `${deletedLabel} · ${expiresLabel}`;
   }
 
   // ────────────────────────────────────────────────────────────
@@ -1132,6 +1306,7 @@ import { showToast } from "./toast.js";
     const save = document.createElement("button");
     save.className = "pm-btn pm-btn-primary";
     save.type = "button";
+    save.dataset.pmSavePrompt = "true";
     save.textContent = "Save";
     save.addEventListener("click", () => onSavePrompt(prompt));
 
@@ -1222,12 +1397,17 @@ import { showToast } from "./toast.js";
   }
 
   function onSavePrompt(existing) {
+    const saveBtn = document.querySelector("[data-pm-save-prompt]");
+    if (saveBtn?.disabled) return;
+
     const title = document.getElementById("pm-title").value.trim();
     const body = document.getElementById("pm-prompt-body").value.trim();
     if (!title || !body) {
       showToast("Title and prompt body are required.", "info");
       return;
     }
+
+    setSaveButtonLoading(saveBtn, true);
 
     if (existing) recordAnalytics("edited");
     else recordAnalytics("created");
@@ -1244,12 +1424,24 @@ import { showToast } from "./toast.js";
       .then(() => {
         closePromptModal();
         refreshPromptData();
+        showToast(existing ? "Prompt updated." : "Prompt added.", "success");
       })
       .catch((err) => {
         console.warn("PromptMate: save failed", err);
+        setSaveButtonLoading(saveBtn, false);
         showToast("Failed to save prompt. Try again.");
         refreshPromptData();
       });
+  }
+
+  function setSaveButtonLoading(button, isLoading) {
+    if (!button) return;
+    button.disabled = isLoading;
+    if (isLoading) {
+      button.innerHTML = `<span class="pm-btn-spinner" aria-hidden="true"></span><span>Saving...</span>`;
+    } else {
+      button.textContent = "Save";
+    }
   }
 
   function makeField(id, label, kind, placeholder) {
