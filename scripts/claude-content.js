@@ -178,6 +178,22 @@ import { copyToClipboard } from "./utility.js";
     refreshPromptData();
   }
 
+  function moreMenuIconSvg() {
+    return `<svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="3.5" cy="7.5" r=".8"/><circle cx="7.5" cy="7.5" r=".8"/><circle cx="11.5" cy="7.5" r=".8"/></svg>`;
+  }
+
+  function libraryIconSvg() {
+    return `<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 3.5h9v7.5h-9z"/><path d="M4.5 5.5h5"/><path d="M4.5 7.5h3.5"/></svg>`;
+  }
+
+  function trashIconSvg() {
+    return `<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 4h9"/><path d="M5 4V2.5h4V4"/><path d="M4 4.5l.4 7h5.2l.4-7"/></svg>`;
+  }
+
+  function viewToggleIconSvg() {
+    return currentView === "trash" ? libraryIconSvg() : trashIconSvg();
+  }
+
   function buildHeader() {
     const wrap = document.createElement("header");
     wrap.className = "pm-header";
@@ -188,13 +204,13 @@ import { copyToClipboard } from "./utility.js";
       </div>
       <div class="pm-header-actions">
         <div class="pm-settings-wrap">
-          <button class="pm-iconbtn ${currentView === "trash" ? "pm-active" : ""}" type="button" aria-label="PromptMate settings" title="Settings" data-pm-settings>
-            <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.5" cy="7.5" r="2.1"/><path d="M7.5 1.8v1.4M7.5 11.8v1.4M3.45 3.45l1 1M10.55 10.55l1 1M1.8 7.5h1.4M11.8 7.5h1.4M3.45 11.55l1-1M10.55 4.45l1-1"/></svg>
+          <button class="pm-iconbtn ${currentView === "trash" ? "pm-active" : ""}" type="button" aria-label="PromptMate menu" title="Menu" data-pm-settings>
+            ${moreMenuIconSvg()}
           </button>
           <div class="pm-settings-menu" data-pm-settings-menu>
             <button class="pm-settings-item ${currentView === "trash" ? "pm-active" : ""}" type="button" data-pm-recently-deleted>
               <span class="pm-settings-item-icon">
-                <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 4h9"/><path d="M5 4V2.5h4V4"/><path d="M4 4.5l.4 7h5.2l.4-7"/></svg>
+                ${viewToggleIconSvg()}
               </span>
               <span>${currentView === "trash" ? "Prompt library" : "Recently deleted"}</span>
             </button>
@@ -235,6 +251,8 @@ import { copyToClipboard } from "./utility.js";
     const item = document.querySelector("[data-pm-recently-deleted]");
     if (item) {
       item.classList.toggle("pm-active", showingTrash);
+      const icon = item.querySelector(".pm-settings-item-icon");
+      if (icon) icon.innerHTML = showingTrash ? libraryIconSvg() : trashIconSvg();
       const label = item.querySelector("span:last-child");
       if (label) label.textContent = showingTrash ? "Prompt library" : "Recently deleted";
     }
