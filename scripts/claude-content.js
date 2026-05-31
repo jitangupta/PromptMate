@@ -34,10 +34,12 @@ import { showToast } from "./toast.js";
   const SIDEBAR_ID = "promptmate-sidebar";
   const PILL_ID = "promptmate-pill";
   const SIDEBAR_WIDTH = 380;
+  const COMPOSE_DISCLOSURE_STATE_KEY = "promptmate.composeDisclosureOpen";
 
   let composePrefs = { tone: null, format: null };
   getComposePrefs().then((p) => {
     composePrefs = p;
+    syncComposePrefsUi();
   });
 
   let onboardingDismissed = false;
@@ -251,10 +253,19 @@ import { showToast } from "./toast.js";
   function buildComposeDisclosure() {
     const details = document.createElement("details");
     details.className = "pm-compose";
-    if (!composePrefs.tone && !composePrefs.format) details.open = true;
+    details.open = sessionStorage.getItem(COMPOSE_DISCLOSURE_STATE_KEY) === "true";
 
     const summary = document.createElement("summary");
-    summary.textContent = "Tone & Format (optional)";
+    const title = document.createElement("span");
+    title.textContent = "Tone & Format";
+    const selected = document.createElement("span");
+    selected.className = "pm-compose-summary-value";
+    selected.dataset.pmComposeSummary = "true";
+    const updateSummary = () => {
+      selected.textContent = getComposeSummaryText();
+    };
+    updateSummary();
+    summary.append(title, selected);
     details.appendChild(summary);
 
     const body = document.createElement("div");
@@ -262,8 +273,7 @@ import { showToast } from "./toast.js";
 
     const hint = document.createElement("p");
     hint.className = "pm-compose-hint";
-    hint.textContent =
-      "Pick a tone and a format to steer the response. Their instructions are appended to your prompt when you click Use.";
+    hint.textContent = "Optional tweaks for how the response should sound and look.";
     body.appendChild(hint);
 
     const tone = buildSelect("pm-tone-pref", "Tone", TONE_OPTIONS, composePrefs.tone);
@@ -275,15 +285,52 @@ import { showToast } from "./toast.js";
     tone.select.addEventListener("change", () => {
       composePrefs.tone = tone.select.value || null;
       tone.updateInstruction(TONE_OPTIONS);
+      updateSummary();
       setComposePrefs(composePrefs).catch(() => {});
     });
     format.select.addEventListener("change", () => {
       composePrefs.format = format.select.value || null;
       format.updateInstruction(FORMAT_OPTIONS);
+      updateSummary();
       setComposePrefs(composePrefs).catch(() => {});
+    });
+    details.addEventListener("toggle", () => {
+      sessionStorage.setItem(COMPOSE_DISCLOSURE_STATE_KEY, details.open ? "true" : "false");
     });
 
     return details;
+  }
+
+  function getComposeOptionLabel(options, value) {
+    if (!value) return "None";
+    return options.some((o) => o.option === value) ? value : "None";
+  }
+
+  function getComposeSummaryText() {
+    return `Tone: ${getComposeOptionLabel(TONE_OPTIONS, composePrefs.tone)} · Format: ${getComposeOptionLabel(FORMAT_OPTIONS, composePrefs.format)}`;
+  }
+
+  function syncComposePrefsUi() {
+    const toneSelect = document.getElementById("pm-tone-pref");
+    const formatSelect = document.getElementById("pm-format-pref");
+    if (toneSelect) {
+      toneSelect.value = TONE_OPTIONS.some((o) => o.option === composePrefs.tone) ? composePrefs.tone : "";
+      updateComposeInstruction(toneSelect, TONE_OPTIONS);
+    }
+    if (formatSelect) {
+      formatSelect.value = FORMAT_OPTIONS.some((o) => o.option === composePrefs.format) ? composePrefs.format : "";
+      updateComposeInstruction(formatSelect, FORMAT_OPTIONS);
+    }
+    const summary = document.querySelector("[data-pm-compose-summary]");
+    if (summary) summary.textContent = getComposeSummaryText();
+  }
+
+  function updateComposeInstruction(select, options) {
+    const wrap = select.closest("label");
+    const instructionEl = wrap?.querySelector(".pm-compose-instruction");
+    if (!instructionEl) return;
+    const match = options.find((o) => o.option === select.value);
+    instructionEl.textContent = match?.instruction || "";
   }
 
   function buildSelect(id, label, options, currentValue) {
@@ -303,25 +350,17 @@ import { showToast } from "./toast.js";
 
     const placeholder = document.createElement("option");
     placeholder.value = "";
-    placeholder.textContent = `— ${label} —`;
+    placeholder.textContent = "None";
     select.appendChild(placeholder);
 
-    const cats = [...new Set(options.map((o) => o.category))];
-    cats.forEach((cat) => {
-      const og = document.createElement("optgroup");
-      og.label = cat;
-      options
-        .filter((o) => o.category === cat)
-        .forEach((o) => {
-          const opt = document.createElement("option");
-          opt.value = o.option;
-          opt.textContent = o.option;
-          og.appendChild(opt);
-        });
-      select.appendChild(og);
+    options.forEach((o) => {
+      const opt = document.createElement("option");
+      opt.value = o.option;
+      opt.textContent = o.option;
+      select.appendChild(opt);
     });
 
-    if (currentValue) select.value = currentValue;
+    if (options.some((o) => o.option === currentValue)) select.value = currentValue;
 
     const instructionEl = document.createElement("p");
     instructionEl.className = "pm-compose-instruction";
