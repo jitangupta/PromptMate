@@ -45,6 +45,24 @@ export default [
     ]
   },
   {
+    input: 'scripts/deepseek-content.js',
+    output: {
+      file: 'dist/deepseek-content.bundle.js',
+      format: 'iife',
+      sourcemap: true
+    },
+    plugins: [
+      resolve(),
+      commonjs(),
+      postcss({
+        inject: true,
+        minimize: isProd,
+        extensions: ['.css']
+      }),
+      ...maybeTerser()
+    ]
+  },
+  {
     input: 'background.js',
     output: {
       file: 'dist/background.bundle.js',
