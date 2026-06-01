@@ -22,6 +22,9 @@ import {
   dismissOnboardingGuide,
   getWhatsNewState,
   dismissWhatsNew,
+  WHATS_NEW_VERSION,
+  getRatingPromptState,
+  dismissRatingPrompt,
 } from "./business.js";
 
 import {
@@ -41,6 +44,7 @@ import { copyToClipboard } from "./utility.js";
   const SIDEBAR_WIDTH = 380;
   const COMPOSE_DISCLOSURE_STATE_KEY = "promptmate.composeDisclosureOpen";
   const BRAND_ICON_URL = chrome.runtime.getURL("icons/icon128.png");
+  const REVIEW_URL = `https://chrome.google.com/webstore/detail/${chrome.runtime.id}/reviews`;
 
   // Session-level compose prefs (Tone/Format from the disclosure). Cached in
   // memory so Use clicks don't await chrome.storage on every fire.
@@ -58,6 +62,12 @@ import { copyToClipboard } from "./utility.js";
   let whatsNewDismissed = false;
   getWhatsNewState().then((s) => {
     whatsNewDismissed = s.historyDismissed;
+  });
+
+  let ratingPromptReady = false;
+  getRatingPromptState().then((s) => {
+    ratingPromptReady = s.eligible;
+    if (ratingPromptReady && document.getElementById(SIDEBAR_ID)) refreshAuthState();
   });
 
   // Cached prompt fetch + search state. Keystrokes paint from the cache so
@@ -175,6 +185,8 @@ import { copyToClipboard } from "./utility.js";
     if (onboardingBanner) sb.appendChild(onboardingBanner);
     const whatsNewBanner = buildWhatsNewBanner();
     if (whatsNewBanner) sb.appendChild(whatsNewBanner);
+    const ratingBanner = buildRatingBanner();
+    if (ratingBanner) sb.appendChild(ratingBanner);
     sb.appendChild(buildComposeDisclosure());
 
     const insertFallbackHost = document.createElement("div");
@@ -306,9 +318,9 @@ import { copyToClipboard } from "./utility.js";
     banner.id = "pm-whats-new-banner";
     banner.innerHTML = `
       <div class="pm-whats-new-content">
-        <span class="pm-whats-new-badge">New in v0.6.0</span>
-        <strong class="pm-whats-new-title">Prompt History</strong>
-        <p class="pm-whats-new-desc">Track changes to any prompt. Open the <strong>···</strong> menu on a card and select <strong>History</strong> to compare versions and restore a previous draft.</p>
+        <span class="pm-whats-new-badge">New in v${WHATS_NEW_VERSION}</span>
+        <strong class="pm-whats-new-title">DeepSeek support + prompt recovery</strong>
+        <p class="pm-whats-new-desc">PromptMate now works on DeepSeek. You can also open the <strong>···</strong> menu and choose <strong>Recently deleted</strong> to restore deleted prompts before they expire.</p>
       </div>
       <button class="pm-iconbtn pm-whats-new-dismiss" type="button" aria-label="Dismiss">
         <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M2 2l10 10M12 2l-10 10"/></svg>
@@ -320,6 +332,33 @@ import { copyToClipboard } from "./utility.js";
       const el = document.getElementById("pm-whats-new-banner");
       if (el) el.remove();
     });
+    return banner;
+  }
+
+  function buildRatingBanner() {
+    if (!ratingPromptReady) return null;
+    const banner = document.createElement("div");
+    banner.className = "pm-whats-new-banner pm-rating-banner";
+    banner.id = "pm-rating-banner";
+    banner.innerHTML = `
+      <div class="pm-whats-new-content">
+        <span class="pm-whats-new-badge">A quick favor</span>
+        <strong class="pm-whats-new-title">Enjoying PromptMate?</strong>
+        <p class="pm-whats-new-desc">A Chrome Web Store rating helps more people trust the extension.</p>
+        <a class="pm-rating-link" href="${REVIEW_URL}" target="_blank" rel="noopener noreferrer">Rate PromptMate</a>
+      </div>
+      <button class="pm-iconbtn pm-whats-new-dismiss" type="button" aria-label="Dismiss rating prompt">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M2 2l10 10M12 2l-10 10"/></svg>
+      </button>
+    `;
+    const dismiss = (action) => {
+      ratingPromptReady = false;
+      dismissRatingPrompt(action).catch(() => {});
+      const el = document.getElementById("pm-rating-banner");
+      if (el) el.remove();
+    };
+    banner.querySelector(".pm-rating-link").addEventListener("click", () => dismiss("rated"));
+    banner.querySelector(".pm-whats-new-dismiss").addEventListener("click", () => dismiss("dismissed"));
     return banner;
   }
 
@@ -511,13 +550,26 @@ import { copyToClipboard } from "./utility.js";
 
     footer.appendChild(row);
 
+    const links = document.createElement("div");
+    links.className = "pm-footer-links";
+
+    const rateLink = document.createElement("a");
+    rateLink.className = "pm-footer-link";
+    rateLink.href = REVIEW_URL;
+    rateLink.target = "_blank";
+    rateLink.rel = "noopener noreferrer";
+    rateLink.textContent = "Rate PromptMate";
+    links.appendChild(rateLink);
+
     const requestLink = document.createElement("a");
-    requestLink.className = "pm-request-feature-link";
+    requestLink.className = "pm-footer-link";
     requestLink.href = "https://forms.gle/ripbRre2nCFcJ4hz6";
     requestLink.target = "_blank";
     requestLink.rel = "noopener noreferrer";
     requestLink.textContent = "Request a feature";
-    footer.appendChild(requestLink);
+    links.appendChild(requestLink);
+
+    footer.appendChild(links);
 
     return footer;
   }

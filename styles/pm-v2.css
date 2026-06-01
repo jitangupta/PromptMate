@@ -332,6 +332,31 @@
   margin-top: 1px;
 }
 
+.pm-rating-banner {
+  background: oklch(72% 0.13 145 / 0.08);
+  border-color: oklch(72% 0.13 145 / 0.34);
+}
+
+.pm-rating-banner .pm-whats-new-badge {
+  color: var(--pm-green);
+  background: oklch(72% 0.13 145 / 0.13);
+}
+
+.pm-rating-link {
+  display: inline-flex;
+  align-items: center;
+  margin-top: 8px;
+  color: var(--pm-green);
+  font-size: 11.5px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.pm-rating-link:hover {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
 /* ── Compose options disclosure ─────────────────────────────── */
 .pm-compose {
   margin: 0 18px 12px;
@@ -786,18 +811,23 @@
   color: var(--pm-text);
 }
 
-.pm-request-feature-link {
-  display: block;
-  text-align: center;
-  font-size: 10.5px;
+.pm-footer-links {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
   margin-top: 8px;
+}
+
+.pm-footer-link {
+  display: inline-flex;
+  font-size: 10.5px;
   color: var(--pm-text-2);
   text-decoration: none;
   opacity: 0.7;
   transition: opacity 0.15s;
 }
 
-.pm-request-feature-link:hover {
+.pm-footer-link:hover {
   opacity: 1;
   text-decoration: underline;
   text-underline-offset: 2px;

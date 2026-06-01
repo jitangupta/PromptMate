@@ -1,13 +1,77 @@
 <!DOCTYPE html>
 <html>
-    <head>
-        <title>PromptMate</title>
-        <link rel="stylesheet" href="popup.css">
-    </head>
-    <body>
-        <h1>PromptMate</h1>
-        <div class="beta-badge">Beta</div>
-        <script src="popup.js"></script>
-    </body>
+  <head>
+    <title>PromptMate</title>
+    <link rel="stylesheet" href="popup.css">
+  </head>
+  <body>
+    <main class="popup-shell">
+      <header class="popup-header">
+        <div>
+          <h1>PromptMate</h1>
+          <p>Your prompts, one click away.</p>
+        </div>
+        <span class="beta-badge">Beta</span>
+      </header>
+
+      <section class="status-panel" aria-labelledby="site-status-title">
+        <div>
+          <h2 id="site-status-title">Current site</h2>
+          <p id="site-status">Checking this tab...</p>
+        </div>
+        <span id="site-pill" class="site-pill">Checking</span>
+      </section>
+
+      <section aria-labelledby="platforms-title">
+        <h2 id="platforms-title">Platforms</h2>
+        <ul class="platform-list">
+          <li>
+            <span>ChatGPT</span>
+            <span class="platform-status">Supported</span>
+          </li>
+          <li>
+            <span>Claude</span>
+            <span class="platform-status">Supported</span>
+          </li>
+          <li>
+            <span>DeepSeek <span class="new-badge">New</span></span>
+            <span class="platform-status">Supported</span>
+          </li>
+        </ul>
+      </section>
+
+      <section aria-labelledby="whats-new-title">
+        <div class="section-heading">
+          <h2 id="whats-new-title">What's new</h2>
+          <span>v0.7.0</span>
+        </div>
+        <ul class="whats-new-list">
+          <li>
+            <span class="change-tag feature">Feature</span>
+            <span>DeepSeek support is now available.</span>
+          </li>
+          <li>
+            <span class="change-tag feature">Feature</span>
+            <span>Restore deleted prompts from Recently deleted.</span>
+          </li>
+          <li>
+            <span class="change-tag fix">Fix</span>
+            <span>More reliable prompt recovery after accidental deletes.</span>
+          </li>
+          <li>
+            <span class="change-tag ui">UI</span>
+            <span>Cleaner platform and release details in the popup.</span>
+          </li>
+        </ul>
+      </section>
+
+      <footer class="popup-footer">
+        <a id="rate-link" class="popup-link" href="#" target="_blank" rel="noopener noreferrer">Rate PromptMate</a>
+        <a class="popup-link" href="https://forms.gle/ripbRre2nCFcJ4hz6" target="_blank" rel="noopener noreferrer">Request a feature</a>
+      </footer>
+    </main>
+
+    <script src="popup.js"></script>
+  </body>
 </html>
 

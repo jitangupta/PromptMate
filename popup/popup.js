@@ -1,16 +1,45 @@
-document.getElementById("inject").addEventListener("click", async () => {
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  const prompt = document.getElementById("prompt").value;
+const SUPPORTED_HOSTS = new Map([
+  ["chatgpt.com", "ChatGPT"],
+  ["claude.ai", "Claude"],
+  ["chat.deepseek.com", "DeepSeek"],
+]);
 
-  chrome.scripting.executeScript({
-    target: { tabId: tab.id },
-    func: (userPrompt) => {
-      const textarea = document.querySelector("textarea");
-      if (textarea) {
-        textarea.value = userPrompt;
-        textarea.dispatchEvent(new Event('input', { bubbles: true }));
-      }
-    },
-    args: [prompt]
-  });
-});
+const REVIEW_URL = `https://chrome.google.com/webstore/detail/${chrome.runtime.id}/reviews`;
+
+function getSupportedPlatform(url) {
+  try {
+    const { hostname } = new URL(url);
+    return SUPPORTED_HOSTS.get(hostname) || null;
+  } catch {
+    return null;
+  }
+}
+
+async function updateCurrentSite() {
+  const status = document.getElementById("site-status");
+  const pill = document.getElementById("site-pill");
+
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    const platform = getSupportedPlatform(tab?.url || "");
+
+    if (platform) {
+      status.textContent = `PromptMate is available on ${platform}.`;
+      pill.textContent = "Supported";
+      pill.classList.add("supported");
+      return;
+    }
+
+    status.textContent = "Open ChatGPT, Claude, or DeepSeek to use the sidebar.";
+    pill.textContent = "Not active";
+    pill.classList.remove("supported");
+  } catch {
+    status.textContent = "Could not read the current tab.";
+    pill.textContent = "Unknown";
+    pill.classList.remove("supported");
+  }
+}
+
+document.getElementById("rate-link").href = REVIEW_URL;
+
+updateCurrentSite();

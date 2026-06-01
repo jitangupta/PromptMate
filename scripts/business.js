@@ -834,17 +834,76 @@ export function dismissOnboardingGuide() {
 // ---- What's New state ----
 
 export const WHATS_NEW_KEY = "promptmate.whatsNew";
+export const WHATS_NEW_VERSION = "0.7.0";
+export const RATING_PROMPT_KEY = "promptmate.ratingPrompt";
+const RATING_PROMPT_DELAY_MS = 7 * 24 * 60 * 60 * 1000;
 
 export function getWhatsNewState() {
   return new Promise((resolve) =>
-    chrome.storage.local.get([WHATS_NEW_KEY], (r) =>
-      resolve(r?.[WHATS_NEW_KEY] || { historyDismissed: false })
-    )
+    chrome.storage.local.get([WHATS_NEW_KEY], (r) => {
+      const state = r?.[WHATS_NEW_KEY] || {};
+      resolve({
+        ...state,
+        historyDismissed: state.dismissedVersion === WHATS_NEW_VERSION,
+      });
+    })
   );
 }
 
 export function dismissWhatsNew() {
   return new Promise((resolve) =>
-    chrome.storage.local.set({ [WHATS_NEW_KEY]: { historyDismissed: true } }, resolve)
+    chrome.storage.local.set(
+      { [WHATS_NEW_KEY]: { dismissedVersion: WHATS_NEW_VERSION } },
+      resolve
+    )
+  );
+}
+
+export function getRatingPromptState() {
+  return new Promise((resolve) =>
+    chrome.storage.local.get([RATING_PROMPT_KEY], (r) => {
+      const stored = r?.[RATING_PROMPT_KEY] || {};
+      const now = Date.now();
+      const firstSeenTime = new Date(stored.firstSeenAt).getTime();
+
+      if (stored.version !== WHATS_NEW_VERSION || !Number.isFinite(firstSeenTime)) {
+        const next = {
+          version: WHATS_NEW_VERSION,
+          firstSeenAt: new Date(now).toISOString(),
+          dismissedAt: null,
+          action: null,
+        };
+        chrome.storage.local.set({ [RATING_PROMPT_KEY]: next }, () =>
+          resolve({ ...next, eligible: false })
+        );
+        return;
+      }
+
+      const dismissed = !!stored.dismissedAt || stored.action === "rated";
+      resolve({
+        ...stored,
+        eligible: !dismissed && now - firstSeenTime >= RATING_PROMPT_DELAY_MS,
+      });
+    })
+  );
+}
+
+export function dismissRatingPrompt(action = "dismissed") {
+  return new Promise((resolve) =>
+    chrome.storage.local.get([RATING_PROMPT_KEY], (r) => {
+      const current = r?.[RATING_PROMPT_KEY] || {};
+      chrome.storage.local.set(
+        {
+          [RATING_PROMPT_KEY]: {
+            ...current,
+            version: WHATS_NEW_VERSION,
+            firstSeenAt: current.firstSeenAt || new Date().toISOString(),
+            dismissedAt: new Date().toISOString(),
+            action,
+          },
+        },
+        resolve
+      );
+    })
   );
 }
