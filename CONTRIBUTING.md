@@ -12,6 +12,26 @@ npm run build    # one-off build
 npm run watch    # rebuild on change
 ```
 
+### Google OAuth setup (required for sign-in)
+
+Google login uses your own OAuth client so credentials are never shared in the repo.
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com) → **APIs & Services** → **Credentials**
+2. **Create credentials** → **OAuth 2.0 Client ID** → Application type: **Web application**
+3. Under **Authorized redirect URIs**, add:
+   ```
+   https://oknglgpcglngpaobpjndcaaljdchmgai.chromiumapp.org/
+   ```
+   This URI is stable for all contributors because `manifest.json` pins the extension ID via the `key` field.
+4. Copy the example secrets file and fill in your credentials:
+   ```bash
+   cp secrets.local.example.js secrets.local.js
+   # then edit secrets.local.js with your Client ID and Client Secret
+   ```
+5. Run `npm run build` — the credentials get bundled at build time.
+
+> `secrets.local.js` is gitignored. Never commit it.
+
 Load the extension in Chrome:
 
 1. `chrome://extensions` → enable **Developer mode**
