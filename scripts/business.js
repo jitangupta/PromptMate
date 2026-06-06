@@ -69,17 +69,28 @@ const emptyCache = () => ({
 
 const TRASH_RETENTION_DAYS = 30;
 
+export function isContextInvalidated(err) {
+  return (
+    err?.message?.includes("Extension context invalidated") ||
+    chrome.runtime?.id === undefined
+  );
+}
+
 function readCache() {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     chrome.storage.local.get({ [CACHE_KEY]: null }, (res) => {
+      if (chrome.runtime?.lastError) return reject(chrome.runtime.lastError);
       resolve(res[CACHE_KEY] || emptyCache());
     });
   });
 }
 
 function writeCache(cache) {
-  return new Promise((resolve) => {
-    chrome.storage.local.set({ [CACHE_KEY]: cache }, () => resolve());
+  return new Promise((resolve, reject) => {
+    chrome.storage.local.set({ [CACHE_KEY]: cache }, () => {
+      if (chrome.runtime?.lastError) return reject(chrome.runtime.lastError);
+      resolve();
+    });
   });
 }
 
@@ -284,15 +295,15 @@ async function reconcileFromDrive() {
   const nextPrompts = { ...(cache.prompts || {}) };
 
   // Evict cache entries whose Drive file is gone — but never evict a prompt
-  // that has an in-flight optimistic write (`pending: true`) or that has no
-  // Drive file yet (`fileId == null`, e.g. an offline create still queued).
-  // Without this guard a reconcile can race a save and silently delete the
-  // user's prompt before the create/update lands on Drive.
+  // that has an in-flight optimistic write (`pending: true`). Real offline
+  // creates always go through savePrompt which sets pending:true, so that flag
+  // is the correct guard. The old fileId==null guard was too broad and kept
+  // cache-only orphans (e.g. seeded prompts) that have no pending write queued
+  // and will never reach Drive.
   for (const promptId of Object.keys(nextPrompts)) {
     if (seen[promptId]) continue;
     const entry = nextPrompts[promptId];
     if (entry?.pending) continue;
-    if (!entry?.fileId) continue;
     delete nextPrompts[promptId];
   }
 

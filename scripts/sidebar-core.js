@@ -25,6 +25,7 @@ import {
   WHATS_NEW_VERSION,
   getRatingPromptState,
   dismissRatingPrompt,
+  isContextInvalidated,
 } from "./business.js";
 
 import {
@@ -1012,12 +1013,20 @@ export function initSidebar({ insertText, adjustLayout = () => {} }) {
             restorePrompt(prompt.promptId)
               .then(() => refreshPromptData())
               .catch((err) => {
+                if (isContextInvalidated(err)) {
+                  showToast("Extension updated — refresh the page to continue.", "error");
+                  return;
+                }
                 console.warn("PromptMate: undo delete failed", err);
                 showToast("Couldn't restore prompt. Open Trash to try again.");
               }),
         });
       })
       .catch((err) => {
+        if (isContextInvalidated(err)) {
+          showToast("Extension updated — refresh the page to continue.", "error");
+          return;
+        }
         console.warn("PromptMate: delete failed", err);
         showToast("Failed to delete prompt. Try again.");
       });
