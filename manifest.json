@@ -17,7 +17,9 @@
   "host_permissions": [
     "*://chatgpt.com/*",
     "*://claude.ai/*",
-    "*://chat.deepseek.com/*"
+    "*://chat.deepseek.com/*",
+    "*://kimi.com/*",
+    "*://www.kimi.com/*"
   ],
   "action": {
     "default_popup": "popup/popup.html",
@@ -43,12 +45,17 @@
     {
       "matches": ["*://chat.deepseek.com/*"],
       "js": ["dist/deepseek-content.bundle.js"]
+    },
+    {
+      "matches": ["*://kimi.com/*", "*://www.kimi.com/*"],
+      "js": ["dist/kimi-content.bundle.js"],
+      "run_at": "document_idle"
     }
   ],
   "web_accessible_resources": [
     {
       "resources": ["icons/icon128.png"],
-      "matches": ["*://chatgpt.com/*", "*://claude.ai/*", "*://chat.deepseek.com/*"]
+      "matches": ["*://chatgpt.com/*", "*://claude.ai/*", "*://chat.deepseek.com/*", "*://kimi.com/*", "*://www.kimi.com/*"]
     }
   ]
 }
