@@ -314,7 +314,12 @@ async function reconcileFromDrive() {
         tone: content.tone ?? null,
         format: content.format ?? null,
         pinned: typeof content.pinned === "boolean" ? content.pinned : false,
-        used: Number.isFinite(content.used) ? content.used : 0,
+        // Prefer the higher of local vs Drive so cache-only increments
+        // (from incrementPromptUsed) are not lost on reconcile.
+        used: Math.max(
+          Number.isFinite(content.used) ? content.used : 0,
+          Number.isFinite(nextPrompts[promptId]?.used) ? nextPrompts[promptId].used : 0
+        ),
         createdAt: content.createdAt ?? new Date().toISOString(),
         updatedAt: content.updatedAt ?? meta.modifiedTime ?? new Date().toISOString(),
         deletedAt: content.deletedAt || null,
@@ -747,11 +752,18 @@ export async function setPromptPinned(promptId, pinned) {
 }
 
 export async function incrementPromptUsed(promptId) {
-  const cache = await readCache();
-  const existing = cache.prompts?.[promptId];
-  if (!existing) return;
-  const nextUsed = (Number.isFinite(existing.used) ? existing.used : 0) + 1;
-  return savePrompt({ ...existing, used: nextUsed });
+  // Update the local cache only — `used` is a UI counter, not a content
+  // revision. Writing to Drive here would create a spurious revision entry
+  // in version history for every "Use" click.
+  await mutateCache((c) => {
+    const existing = c.prompts?.[promptId];
+    if (!existing) return c;
+    c.prompts[promptId] = {
+      ...existing,
+      used: (Number.isFinite(existing.used) ? existing.used : 0) + 1,
+    };
+    return c;
+  });
 }
 
 // ---- Version history (Task 06) ----
