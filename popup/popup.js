@@ -2,6 +2,8 @@ const SUPPORTED_HOSTS = new Map([
   ["chatgpt.com", "ChatGPT"],
   ["claude.ai", "Claude"],
   ["chat.deepseek.com", "DeepSeek"],
+  ["kimi.com", "Kimi"],
+  ["www.kimi.com", "Kimi"],
 ]);
 
 const REVIEW_URL = `https://chrome.google.com/webstore/detail/${chrome.runtime.id}/reviews`;
@@ -30,7 +32,7 @@ async function updateCurrentSite() {
       return;
     }
 
-    status.textContent = "Open ChatGPT, Claude, or DeepSeek to use the sidebar.";
+    status.textContent = "Open ChatGPT, Claude, DeepSeek, or Kimi to use the sidebar.";
     pill.textContent = "Not active";
     pill.classList.remove("supported");
   } catch {
