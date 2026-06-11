@@ -25,6 +25,7 @@ import {
   WHATS_NEW_VERSION,
   getRatingPromptState,
   dismissRatingPrompt,
+  isContextInvalidated,
 } from "./business.js";
 
 import {
@@ -86,7 +87,14 @@ export function initSidebar({ insertText, adjustLayout = () => {} }) {
   // ────────────────────────────────────────────────────────────
   function toggleSidebar() {
     let sb = document.getElementById(SIDEBAR_ID);
-    if (!sb) sb = createSidebar();
+    if (!sb) {
+      try {
+        sb = createSidebar();
+      } catch (err) {
+        console.warn("PromptMate: failed to create sidebar", err);
+        return;
+      }
+    }
     if (!sb) return;
 
     const isOpen = sb.classList.toggle("pm-open");
@@ -97,9 +105,13 @@ export function initSidebar({ insertText, adjustLayout = () => {} }) {
 
     if (isOpen) {
       refreshAuthState();
-      drainPendingWrites().catch((err) =>
-        console.warn("PromptMate: drain pending writes failed", err)
-      );
+      drainPendingWrites().catch((err) => {
+        if (isContextInvalidated(err)) {
+          showToast("Extension updated — please refresh the page.", "error");
+          return;
+        }
+        console.warn("PromptMate: drain pending writes failed", err);
+      });
     }
   }
 
@@ -134,6 +146,7 @@ export function initSidebar({ insertText, adjustLayout = () => {} }) {
     // Mount on document.body so position:fixed is viewport-relative. Inside
     // a host's React tree, a transformed ancestor would otherwise become the
     // containing block and break the fixed positioning.
+    if (!document.body) throw new Error("PromptMate: document.body not ready");
     const sb = document.createElement("aside");
     sb.id = SIDEBAR_ID;
     sb.className = "pm-sidebar";
@@ -233,6 +246,14 @@ export function initSidebar({ insertText, adjustLayout = () => {} }) {
               </span>
               <span>${currentView === "trash" ? "Prompt library" : "Recently deleted"}</span>
             </button>
+            <button class="pm-settings-item" type="button" data-pm-user-guide>
+              <span class="pm-settings-item-icon">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+                </svg>
+              </span>
+              <span>User Guide</span>
+            </button>
           </div>
         </div>
         <button class="pm-iconbtn" type="button" aria-label="Close" data-pm-close>
@@ -254,6 +275,11 @@ export function initSidebar({ insertText, adjustLayout = () => {} }) {
       settingsMenu.classList.remove("open");
       syncSettingsUi();
       refreshPromptData();
+    });
+    wrap.querySelector("[data-pm-user-guide]").addEventListener("click", () => {
+      settingsMenu.classList.remove("open");
+      // TODO: replace with live article URL when published
+      window.open("https://jitangupta.com/promptmate-guide", "_blank", "noopener,noreferrer");
     });
     document.addEventListener("click", (e) => {
       if (!settingsWrap.contains(e.target)) settingsMenu.classList.remove("open");
@@ -648,6 +674,25 @@ export function initSidebar({ insertText, adjustLayout = () => {} }) {
           ? "No deleted prompts."
           : "No prompts yet. Click “New prompt” below to create one.";
       listEl.appendChild(empty);
+      if (currentView === "active") {
+        // TODO: replace with live article URL when published
+        const GUIDE_URL = "https://jitangupta.com/promptmate-guide";
+        const card = document.createElement("div");
+        card.className = "pm-doc-card";
+        card.innerHTML = `
+          <span class="pm-doc-card-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+            </svg>
+          </span>
+          <div class="pm-doc-card-body">
+            <div class="pm-doc-card-title">Getting Started with PromptMate</div>
+            <div class="pm-doc-card-desc">Learn how to save, tone-adjust, and insert prompts in seconds.</div>
+            <a class="pm-doc-link" href="${GUIDE_URL}" target="_blank" rel="noopener noreferrer">Read the guide →</a>
+          </div>
+        `;
+        listEl.appendChild(card);
+      }
       updateSyncIndicator(meta);
       return;
     }
@@ -1012,12 +1057,20 @@ export function initSidebar({ insertText, adjustLayout = () => {} }) {
             restorePrompt(prompt.promptId)
               .then(() => refreshPromptData())
               .catch((err) => {
+                if (isContextInvalidated(err)) {
+                  showToast("Extension updated — refresh the page to continue.", "error");
+                  return;
+                }
                 console.warn("PromptMate: undo delete failed", err);
                 showToast("Couldn't restore prompt. Open Trash to try again.");
               }),
         });
       })
       .catch((err) => {
+        if (isContextInvalidated(err)) {
+          showToast("Extension updated — refresh the page to continue.", "error");
+          return;
+        }
         console.warn("PromptMate: delete failed", err);
         showToast("Failed to delete prompt. Try again.");
       });

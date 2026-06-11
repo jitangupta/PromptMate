@@ -12,13 +12,14 @@
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAg1n+K70mUBYgxVqLl5b7yWCceBnZe1dPwnXf80rMGUhdq88h7xNzixNX2feU3CcuS+i3akeiJvir1nEC+FilN0vKkty5Xbr6h/h+yvh3EHRJYnlZKe1f+6E7hjdj47k5Hv3/Xn/+VSJl8w7kJJkfAQkC2rW5mhcKgIIK9ISY/vzFtCBk2DguPKItOifcWRSK+2pvOegdPOUzy291mrjC+9UuqD9JJcwYXUZ+96PkPJSOYbuSot29GKadM1xGAxXytgrIUZfzepN5keJPjBUlH53c0TNXyyMa5U8BDx4bNkDCbooRN5+HQaNEYOdPwGbGIIT0yRMmaik5BanBKWRmNQIDAQAB",
   "permissions": [
     "storage",
-    "scripting",
     "identity"
   ],
   "host_permissions": [
     "*://chatgpt.com/*",
     "*://claude.ai/*",
-    "*://chat.deepseek.com/*"
+    "*://chat.deepseek.com/*",
+    "*://kimi.com/*",
+    "*://www.kimi.com/*"
   ],
   "action": {
     "default_popup": "popup/popup.html",
@@ -44,12 +45,17 @@
     {
       "matches": ["*://chat.deepseek.com/*"],
       "js": ["dist/deepseek-content.bundle.js"]
+    },
+    {
+      "matches": ["*://kimi.com/*", "*://www.kimi.com/*"],
+      "js": ["dist/kimi-content.bundle.js"],
+      "run_at": "document_idle"
     }
   ],
   "web_accessible_resources": [
     {
       "resources": ["icons/icon128.png"],
-      "matches": ["*://chatgpt.com/*", "*://claude.ai/*", "*://chat.deepseek.com/*"]
+      "matches": ["*://chatgpt.com/*", "*://claude.ai/*", "*://chat.deepseek.com/*", "*://kimi.com/*", "*://www.kimi.com/*"]
     }
   ]
 }
