@@ -1409,6 +1409,24 @@ export function initSidebar({ insertText, adjustLayout = () => {} }) {
       onCopy(prompt);
     });
 
+    const previewItem = document.createElement("button");
+    previewItem.className = "pm-menu-item";
+    previewItem.type = "button";
+    previewItem.textContent = "Preview";
+    previewItem.addEventListener("click", (e) => {
+      e.stopPropagation();
+      menu.classList.remove("open");
+      const vars = extractVariables(prompt.body || "");
+      if (vars.length) {
+        // Variables-first: fill, then preview the filled body (decision 4).
+        openVarFillPopup(prompt, (filled) =>
+          openAssemblyPreview(prompt, substituteVariables(prompt.body || "", filled))
+        );
+      } else {
+        openAssemblyPreview(prompt, null);
+      }
+    });
+
     const edit = document.createElement("button");
     edit.className = "pm-menu-item";
     edit.type = "button";
@@ -1449,7 +1467,7 @@ export function initSidebar({ insertText, adjustLayout = () => {} }) {
     });
 
     const renderDefaultItems = () => {
-      menu.replaceChildren(pin, copy, edit, hist, move, del);
+      menu.replaceChildren(pin, copy, previewItem, edit, hist, move, del);
     };
 
     const movePromptToGroup = (groupId) => {
@@ -1545,7 +1563,7 @@ export function initSidebar({ insertText, adjustLayout = () => {} }) {
       menu.appendChild(newGroup);
     };
 
-    menu.append(pin, copy, edit, hist, move, del);
+    menu.append(pin, copy, previewItem, edit, hist, move, del);
 
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
@@ -1616,12 +1634,18 @@ export function initSidebar({ insertText, adjustLayout = () => {} }) {
       showToast("Couldn't assemble the prompt. Try again.");
       return;
     }
+    performInsert(prompt, text);
+  }
+
+  // Shared tail of every insert path (Use, assembly preview): host insert,
+  // failure banner fallback, analytics, usage counter.
+  function performInsert(prompt, text) {
     const result = insertText(text);
     if (!result.success) {
       insertFailure = { promptId: prompt.promptId, prompt, text };
       paintList();
       showToast("PromptMate couldn't insert automatically. Use Copy in the sidebar.");
-      return;
+      return false;
     }
     clearInsertFailure();
     recordAnalytics("used");
@@ -1631,6 +1655,7 @@ export function initSidebar({ insertText, adjustLayout = () => {} }) {
         console.warn("PromptMate: increment used failed", err);
         showToast("Couldn't update usage count. Your prompt was inserted.");
       });
+    return true;
   }
 
   function onCopy(prompt) {
@@ -2014,6 +2039,181 @@ export function initSidebar({ insertText, adjustLayout = () => {} }) {
         errEl.textContent = "Could not load history. Try again.";
         body.appendChild(errEl);
       });
+  }
+
+  // ────────────────────────────────────────────────────────────
+  // Assembly preview (Task 37)
+  // ────────────────────────────────────────────────────────────
+  async function openAssemblyPreview(prompt, filledBody = null) {
+    document.getElementById("pm-assembly-overlay")?.remove();
+
+    let context, contextEnabled, groups;
+    try {
+      [context, contextEnabled, groups] = await Promise.all([
+        loadContext(),
+        loadContextEnabled(),
+        loadGroups(),
+      ]);
+    } catch (err) {
+      console.warn("PromptMate: assembly preview load failed", err);
+      showToast("Couldn't load assembly data. Try again.");
+      return;
+    }
+
+    const group = groups.find((g) => g.id === prompt.group);
+    const tone = TONE_OPTIONS.find((t) => t.option === composePrefs.tone);
+    const format = FORMAT_OPTIONS.find((f) => f.option === composePrefs.format);
+    const body = filledBody ?? prompt.body ?? "";
+
+    // Session-only toggle state; keys match assembleMessage's toggles.
+    const layers = [
+      {
+        key: "context",
+        tag: "CONTEXT",
+        kind: "personal bio",
+        text: (context || "").trim(),
+        on: contextEnabled,
+        required: false,
+      },
+      {
+        key: "groupInstruction",
+        tag: "GROUP",
+        kind: group?.name || "",
+        text: (group?.instruction || "").trim(),
+        on: group?.instructionEnabled === true,
+        required: false,
+      },
+      {
+        key: "body",
+        tag: "PROMPT",
+        kind: filledBody !== null ? "variables filled" : "prompt body",
+        text: body,
+        on: true,
+        required: true,
+      },
+      {
+        key: "tone",
+        tag: "TONE",
+        kind: tone?.option || "",
+        text: tone?.instruction || "",
+        on: !!tone,
+        required: false,
+      },
+      {
+        key: "format",
+        tag: "FORMAT",
+        kind: format?.option || "",
+        text: format?.instruction || "",
+        on: !!format,
+        required: false,
+      },
+    ].filter((l) => l.text);
+
+    const { overlay, head, body: modalBody, foot } = buildPopupShell(
+      "pm-assembly-overlay",
+      "What gets sent"
+    );
+
+    const subtitle = document.createElement("p");
+    subtitle.className = "pm-varfill-subtitle";
+    subtitle.textContent =
+      "Layers are stitched top-to-bottom into one message. Toggle any layer off for this insert.";
+    head.appendChild(subtitle);
+
+    const timeline = document.createElement("div");
+    timeline.className = "pm-layers";
+    layers.forEach((layer, i) => {
+      timeline.appendChild(buildLayerCard(layer, i === layers.length - 1));
+    });
+    modalBody.appendChild(timeline);
+
+    const insertBtn = document.createElement("button");
+    insertBtn.className = "pm-btn pm-btn-primary pm-btn-block";
+    insertBtn.type = "button";
+    insertBtn.textContent = "Insert assembled message";
+    insertBtn.addEventListener("click", () => {
+      const toggles = {};
+      for (const l of layers) {
+        if (!l.required) toggles[l.key] = l.on;
+      }
+      // Same assembleMessage call shape as buildAssembledText, so the
+      // inserted text matches the preview by construction.
+      const text = assembleMessage({
+        context,
+        groupInstruction: group?.instruction || null,
+        body,
+        tone,
+        format,
+        toggles,
+      });
+      overlay.remove();
+      performInsert(prompt, text);
+    });
+    foot.appendChild(insertBtn);
+
+    const sb = document.getElementById(SIDEBAR_ID);
+    (sb || document.body).appendChild(overlay);
+  }
+
+  function buildLayerCard(layer, isLast) {
+    const row = document.createElement("div");
+    row.className = "pm-layer-row";
+
+    const rail = document.createElement("div");
+    rail.className = "pm-layer-rail";
+    const dot = document.createElement("span");
+    dot.className = `pm-layer-dot${layer.on ? " pm-on" : ""}`;
+    rail.appendChild(dot);
+    if (!isLast) {
+      const connector = document.createElement("span");
+      connector.className = "pm-layer-connector";
+      rail.appendChild(connector);
+    }
+    row.appendChild(rail);
+
+    const card = document.createElement("div");
+    card.className = `pm-layer-card${layer.on ? "" : " pm-layer-off"}`;
+
+    const headRow = document.createElement("div");
+    headRow.className = "pm-layer-head";
+
+    const tag = document.createElement("span");
+    tag.className = "pm-layer-tag";
+    tag.textContent = layer.tag;
+    headRow.appendChild(tag);
+
+    if (layer.kind) {
+      const kind = document.createElement("span");
+      kind.className = "pm-layer-kind";
+      kind.textContent = `· ${layer.kind}`;
+      headRow.appendChild(kind);
+    }
+
+    const spacer = document.createElement("span");
+    spacer.className = "pm-layer-spacer";
+    headRow.appendChild(spacer);
+
+    if (layer.required) {
+      const required = document.createElement("span");
+      required.className = "pm-layer-required pm-mono";
+      required.textContent = "REQUIRED";
+      headRow.appendChild(required);
+    } else {
+      const sw = makeSwitch(layer.on, (on) => {
+        layer.on = on;
+        card.classList.toggle("pm-layer-off", !on);
+        dot.classList.toggle("pm-on", on);
+      });
+      headRow.appendChild(sw.el);
+    }
+
+    const text = document.createElement("p");
+    text.className = "pm-layer-text";
+    text.textContent = layer.text;
+
+    card.append(headRow, text);
+    row.appendChild(card);
+    return row;
   }
 
   // ────────────────────────────────────────────────────────────

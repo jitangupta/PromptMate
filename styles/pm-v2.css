@@ -1632,3 +1632,100 @@ ins.pm-diff-ins {
   flex: none;
   margin-top: 1px;
 }
+
+/* ── Assembly preview (Task 37) ───────────────────────────── */
+
+.pm-layers {
+  display: flex;
+  flex-direction: column;
+}
+
+.pm-layer-row {
+  display: flex;
+  gap: 11px;
+}
+
+.pm-layer-rail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: none;
+  width: 10px;
+  padding-top: 14px;
+}
+
+.pm-layer-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--pm-text-3);
+}
+
+.pm-layer-dot.pm-on {
+  background: var(--pm-green);
+}
+
+.pm-layer-connector {
+  width: 2px;
+  flex: 1;
+  background: var(--pm-border);
+  margin: 4px 0;
+}
+
+.pm-layer-card {
+  flex: 1;
+  min-width: 0;
+  margin-bottom: 10px;
+  padding: 10px 12px;
+  border-radius: 11px;
+  background: var(--pm-card);
+  border: 1px solid var(--pm-card-border);
+  transition: opacity 0.15s ease;
+}
+
+.pm-layer-card.pm-layer-off {
+  opacity: 0.45;
+}
+
+.pm-layer-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.pm-layer-tag {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--pm-text);
+}
+
+.pm-layer-kind {
+  font-size: 11px;
+  color: var(--pm-text-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pm-layer-spacer {
+  flex: 1;
+}
+
+.pm-layer-required {
+  font-size: 9.5px;
+  letter-spacing: 0.06em;
+  color: var(--pm-text-3);
+}
+
+.pm-layer-text {
+  margin: 6px 0 0;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--pm-text-2);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  word-break: break-word;
+}
