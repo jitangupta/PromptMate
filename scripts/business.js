@@ -899,6 +899,72 @@ export async function deleteGroup(groupId) {
   }
 }
 
+// ---- Personal context (Task 36) ----
+// Device-local standing context, prepended to assembled messages when enabled.
+// Deliberately excluded from Drive sync and share/export payloads.
+
+export const CONTEXT_KEY = "promptmate_context";
+export const CONTEXT_ENABLED_KEY = "promptmate_context_enabled";
+
+export function loadContext() {
+  return new Promise((resolve, reject) => {
+    chrome.storage.local.get({ [CONTEXT_KEY]: "" }, (res) => {
+      if (chrome.runtime?.lastError) return reject(chrome.runtime.lastError);
+      resolve(typeof res[CONTEXT_KEY] === "string" ? res[CONTEXT_KEY] : "");
+    });
+  });
+}
+
+export function saveContext(text) {
+  return new Promise((resolve, reject) => {
+    chrome.storage.local.set({ [CONTEXT_KEY]: String(text ?? "") }, () => {
+      if (chrome.runtime?.lastError) return reject(chrome.runtime.lastError);
+      resolve();
+    });
+  });
+}
+
+export function loadContextEnabled() {
+  return new Promise((resolve, reject) => {
+    chrome.storage.local.get({ [CONTEXT_ENABLED_KEY]: true }, (res) => {
+      if (chrome.runtime?.lastError) return reject(chrome.runtime.lastError);
+      resolve(res[CONTEXT_ENABLED_KEY] !== false);
+    });
+  });
+}
+
+export function saveContextEnabled(enabled) {
+  return new Promise((resolve, reject) => {
+    chrome.storage.local.set({ [CONTEXT_ENABLED_KEY]: enabled === true }, () => {
+      if (chrome.runtime?.lastError) return reject(chrome.runtime.lastError);
+      resolve();
+    });
+  });
+}
+
+// Canonical assembly order: context → group instruction → body → tone →
+// format. Pure and sync so it's trivially testable; callers gather the
+// layers from storage. Each optional layer can be suppressed for one insert
+// via toggles.<key> === false (session-only, never persisted).
+export function assembleMessage({
+  context,
+  groupInstruction,
+  body,
+  tone,
+  format,
+  toggles = {},
+} = {}) {
+  const parts = [];
+  if (context?.trim() && toggles.context !== false) parts.push(context.trim());
+  if (groupInstruction?.trim() && toggles.groupInstruction !== false) {
+    parts.push(groupInstruction.trim());
+  }
+  parts.push(body ?? "");
+  if (tone?.instruction && toggles.tone !== false) parts.push(tone.instruction);
+  if (format?.instruction && toggles.format !== false) parts.push(format.instruction);
+  return parts.filter(Boolean).join("\n\n");
+}
+
 // ---- Pin / used helpers (used by stages 2 and 4) ----
 
 export async function setPromptPinned(promptId, pinned) {

@@ -31,6 +31,11 @@ import {
   deleteGroup,
   extractVariables,
   substituteVariables,
+  loadContext,
+  saveContext,
+  loadContextEnabled,
+  saveContextEnabled,
+  assembleMessage,
 } from "./business.js";
 
 import {
@@ -269,6 +274,14 @@ export function initSidebar({ insertText, adjustLayout = () => {} }) {
               </span>
               <span>${currentView === "trash" ? "Prompt library" : "Recently deleted"}</span>
             </button>
+            <button class="pm-settings-item" type="button" data-pm-context>
+              <span class="pm-settings-item-icon">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+                </svg>
+              </span>
+              <span>Your context</span>
+            </button>
             <button class="pm-settings-item" type="button" data-pm-user-guide>
               <span class="pm-settings-item-icon">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -298,6 +311,10 @@ export function initSidebar({ insertText, adjustLayout = () => {} }) {
       settingsMenu.classList.remove("open");
       syncSettingsUi();
       refreshPromptData();
+    });
+    wrap.querySelector("[data-pm-context]").addEventListener("click", () => {
+      settingsMenu.classList.remove("open");
+      openContextPopup();
     });
     wrap.querySelector("[data-pm-user-guide]").addEventListener("click", () => {
       settingsMenu.classList.remove("open");
@@ -984,9 +1001,224 @@ export function initSidebar({ insertText, adjustLayout = () => {} }) {
     return wrap;
   }
 
-  // Placeholder until Task 36 wires the instruction popup.
+  // ────────────────────────────────────────────────────────────
+  // Context & group instructions (Task 36)
+  // ────────────────────────────────────────────────────────────
+  const CONTEXT_EXTRACTION_PROMPT =
+    "Based on everything you know about me from our conversations, write a short 'about me' I can reuse as standing context for future prompts: my role, preferences, and communication style. Plain text, first person, under 120 words.";
+
+  function makeSwitch(initial, onChange) {
+    const btn = document.createElement("button");
+    btn.className = `pm-switch${initial ? " pm-on" : ""}`;
+    btn.type = "button";
+    btn.setAttribute("role", "switch");
+    btn.setAttribute("aria-checked", String(!!initial));
+    const knob = document.createElement("span");
+    knob.className = "pm-switch-knob";
+    btn.appendChild(knob);
+    btn.addEventListener("click", () => {
+      const next = !btn.classList.contains("pm-on");
+      btn.classList.toggle("pm-on", next);
+      btn.setAttribute("aria-checked", String(next));
+      onChange?.(next);
+    });
+    return {
+      el: btn,
+      get value() {
+        return btn.classList.contains("pm-on");
+      },
+    };
+  }
+
+  function buildPopupShell(overlayId, title, onClose) {
+    const overlay = document.createElement("div");
+    overlay.className = "pm-modal-overlay";
+    overlay.id = overlayId;
+    const close = () => {
+      overlay.remove();
+      onClose?.();
+    };
+    overlay.addEventListener("click", (e) => {
+      if (e.target === overlay) close();
+    });
+
+    const modal = document.createElement("div");
+    modal.className = "pm-modal";
+    modal.setAttribute("role", "dialog");
+
+    const head = document.createElement("div");
+    head.className = "pm-modal-head";
+    head.innerHTML = `
+      <h2 class="pm-modal-title">${escapeText(title)}</h2>
+      <button class="pm-iconbtn" type="button" aria-label="Close" data-pm-popup-close>
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M3 3l8 8M11 3l-8 8"/></svg>
+      </button>
+    `;
+    head.querySelector("[data-pm-popup-close]").addEventListener("click", close);
+
+    const body = document.createElement("div");
+    body.className = "pm-modal-body";
+
+    const foot = document.createElement("div");
+    foot.className = "pm-modal-foot";
+
+    modal.append(head, body, foot);
+    overlay.appendChild(modal);
+    return { overlay, head, body, foot, close };
+  }
+
+  function openContextPopup() {
+    document.getElementById("pm-context-overlay")?.remove();
+    const { overlay, body, foot, close } = buildPopupShell("pm-context-overlay", "Your context");
+
+    Promise.all([loadContext(), loadContextEnabled()])
+      .then(([context, enabled]) => {
+        const toggleCard = document.createElement("div");
+        toggleCard.className = "pm-toggle-card";
+        const toggleText = document.createElement("div");
+        toggleText.className = "pm-toggle-card-text";
+        toggleText.innerHTML = `
+          <span class="pm-toggle-card-title">Use context</span>
+          <span class="pm-toggle-card-desc">Quietly attached to every prompt you insert.</span>
+        `;
+        const enabledSwitch = makeSwitch(enabled);
+        toggleCard.append(toggleText, enabledSwitch.el);
+        body.appendChild(toggleCard);
+
+        const field = makeField("pm-context-text", "ABOUT YOU", "textarea",
+          "I'm a senior engineer at a fintech startup. I prefer concise, technical answers…");
+        field.input.value = context;
+        body.appendChild(field.wrap);
+
+        const pull = document.createElement("button");
+        pull.className = "pm-link pm-context-pull";
+        pull.type = "button";
+        pull.textContent = "✦ Pull it from this chat";
+        pull.addEventListener("click", () => {
+          const result = insertText(CONTEXT_EXTRACTION_PROMPT);
+          if (result.success) {
+            close();
+            showToast("Extraction prompt inserted — copy the answer back into Context.", "info", { duration: 6000 });
+          } else {
+            showToast("Couldn't insert the extraction prompt here. Copy your bio in manually.");
+          }
+        });
+        body.appendChild(pull);
+
+        const privacy = document.createElement("div");
+        privacy.className = "pm-privacy-note";
+        privacy.innerHTML = `
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          <span>Stored on this device. Never shared.</span>
+        `;
+        body.appendChild(privacy);
+
+        const cancel = document.createElement("button");
+        cancel.className = "pm-btn pm-btn-secondary";
+        cancel.type = "button";
+        cancel.textContent = "Cancel";
+        cancel.addEventListener("click", close);
+
+        const save = document.createElement("button");
+        save.className = "pm-btn pm-btn-primary";
+        save.type = "button";
+        save.textContent = context ? "Save" : "Add context";
+        save.addEventListener("click", () => {
+          Promise.all([
+            saveContext(field.input.value.trim()),
+            saveContextEnabled(enabledSwitch.value),
+          ])
+            .then(() => {
+              close();
+              showToast("Context saved.", "success");
+            })
+            .catch((err) => {
+              console.warn("PromptMate: save context failed", err);
+              showToast("Couldn't save context. Try again.");
+            });
+        });
+
+        foot.append(cancel, save);
+        field.input.focus();
+      })
+      .catch((err) => {
+        console.warn("PromptMate: load context failed", err);
+        body.textContent = "Couldn't load your context. Close and try again.";
+      });
+
+    const sb = document.getElementById(SIDEBAR_ID);
+    (sb || document.body).appendChild(overlay);
+  }
+
   function openGroupInstructionPopup(group) {
-    showToast(`Group instructions for "${group.name}" are coming soon.`);
+    document.getElementById("pm-group-instruction-overlay")?.remove();
+    const { overlay, head, body, foot, close } = buildPopupShell(
+      "pm-group-instruction-overlay",
+      "Group instruction"
+    );
+
+    const subtitle = document.createElement("p");
+    subtitle.className = "pm-varfill-subtitle";
+    subtitle.textContent = group.name;
+    head.appendChild(subtitle);
+
+    const toggleCard = document.createElement("div");
+    toggleCard.className = "pm-toggle-card";
+    const toggleText = document.createElement("div");
+    toggleText.className = "pm-toggle-card-text";
+    toggleText.innerHTML = `
+      <span class="pm-toggle-card-title">Use instruction</span>
+      <span class="pm-toggle-card-desc">Applied to every prompt in this group.</span>
+    `;
+    const enabledSwitch = makeSwitch(group.instructionEnabled === true);
+    toggleCard.append(toggleText, enabledSwitch.el);
+    body.appendChild(toggleCard);
+
+    const field = makeField("pm-group-instruction-text", "GROUP INSTRUCTION · OPTIONAL", "textarea",
+      "E.g. First-person voice, no hashtags, no emoji, end on a question.");
+    field.input.value = group.instruction || "";
+    body.appendChild(field.wrap);
+
+    const info = document.createElement("div");
+    info.className = "pm-info-callout";
+    info.innerHTML = `
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+      <span>Added to every prompt in this group when you insert it — right after your context, before the prompt body.</span>
+    `;
+    body.appendChild(info);
+
+    const cancel = document.createElement("button");
+    cancel.className = "pm-btn pm-btn-secondary";
+    cancel.type = "button";
+    cancel.textContent = "Cancel";
+    cancel.addEventListener("click", close);
+
+    const save = document.createElement("button");
+    save.className = "pm-btn pm-btn-primary";
+    save.type = "button";
+    save.textContent = "Save";
+    save.addEventListener("click", () => {
+      saveGroup({
+        ...group,
+        instruction: field.input.value.trim(),
+        instructionEnabled: enabledSwitch.value,
+      })
+        .then(() => {
+          close();
+          refreshPromptData();
+          showToast("Group instruction saved.", "success");
+        })
+        .catch((err) => {
+          console.warn("PromptMate: save group instruction failed", err);
+          showToast("Couldn't save instruction. Try again.");
+        });
+    });
+
+    foot.append(cancel, save);
+
+    const sb = document.getElementById(SIDEBAR_ID);
+    (sb || document.body).appendChild(overlay);
+    field.input.focus();
   }
 
   function paintInsertFailure() {
@@ -1335,18 +1567,33 @@ export function initSidebar({ insertText, adjustLayout = () => {} }) {
   // ────────────────────────────────────────────────────────────
   // Compose + Use
   // ────────────────────────────────────────────────────────────
-  function composePromptText(prompt, bodyOverride = null) {
-    // Disclosure is the single source of truth. Legacy prompts can have
-    // `prompt.tone` / `prompt.format` stored as full {option, category,
-    // instruction} objects from older code; falling back to those would
-    // silently append instructions even when the user has cleared the
-    // selectors. Don't.
+  // Canonical assembly: context → group instruction → body → tone → format.
+  // Reads context/groups fresh from storage on every call so the Use flow
+  // never works from stale closure state.
+  async function buildAssembledText(prompt, { bodyOverride = null, toggles = {} } = {}) {
+    const [context, contextEnabled, groups] = await Promise.all([
+      loadContext(),
+      loadContextEnabled(),
+      loadGroups(),
+    ]);
+    const group = groups.find((g) => g.id === prompt.group);
+    const groupInstruction =
+      group?.instructionEnabled && group.instruction?.trim() ? group.instruction : null;
+    // Disclosure is the single source of truth for tone/format. Legacy
+    // prompts can have `prompt.tone` / `prompt.format` stored as full
+    // {option, category, instruction} objects from older code; falling back
+    // to those would silently append instructions even when the user has
+    // cleared the selectors. Don't.
     const tone = TONE_OPTIONS.find((t) => t.option === composePrefs.tone);
     const format = FORMAT_OPTIONS.find((f) => f.option === composePrefs.format);
-    const parts = [bodyOverride ?? prompt.body ?? ""];
-    if (tone?.instruction) parts.push("", tone.instruction);
-    if (format?.instruction) parts.push(format.instruction);
-    return parts.join("\n");
+    return assembleMessage({
+      context: contextEnabled ? context : "",
+      groupInstruction,
+      body: bodyOverride ?? prompt.body ?? "",
+      tone,
+      format,
+      toggles,
+    });
   }
 
   function onUse(prompt) {
@@ -1360,8 +1607,15 @@ export function initSidebar({ insertText, adjustLayout = () => {} }) {
     doInsert(prompt, null);
   }
 
-  function doInsert(prompt, bodyOverride) {
-    const text = composePromptText(prompt, bodyOverride);
+  async function doInsert(prompt, bodyOverride, toggles = {}) {
+    let text;
+    try {
+      text = await buildAssembledText(prompt, { bodyOverride, toggles });
+    } catch (err) {
+      console.warn("PromptMate: assemble failed", err);
+      showToast("Couldn't assemble the prompt. Try again.");
+      return;
+    }
     const result = insertText(text);
     if (!result.success) {
       insertFailure = { promptId: prompt.promptId, prompt, text };
@@ -1380,9 +1634,15 @@ export function initSidebar({ insertText, adjustLayout = () => {} }) {
   }
 
   function onCopy(prompt) {
-    copyToClipboard(composePromptText(prompt)).then((copied) => {
-      if (copied) recordAnalytics("copied");
-    });
+    buildAssembledText(prompt)
+      .then((text) => copyToClipboard(text))
+      .then((copied) => {
+        if (copied) recordAnalytics("copied");
+      })
+      .catch((err) => {
+        console.warn("PromptMate: copy failed", err);
+        showToast("Couldn't copy prompt. Try again.");
+      });
   }
 
   function clearInsertFailure() {
