@@ -26,6 +26,9 @@ import {
   getRatingPromptState,
   dismissRatingPrompt,
   isContextInvalidated,
+  loadGroups,
+  saveGroup,
+  deleteGroup,
 } from "./business.js";
 
 import {
@@ -81,6 +84,24 @@ export function initSidebar({ insertText, adjustLayout = () => {} }) {
   let currentQuery = "";
   let currentView = "active";
   let insertFailure = null;
+
+  const GROUP_COLLAPSE_STATE_KEY = "promptmate.groupCollapse";
+  let lastGroups = [];
+  let collapsedGroups = new Set();
+  try {
+    const stored = JSON.parse(sessionStorage.getItem(GROUP_COLLAPSE_STATE_KEY) || "[]");
+    if (Array.isArray(stored)) collapsedGroups = new Set(stored);
+  } catch {
+    /* corrupt session state — start expanded */
+  }
+
+  function persistGroupCollapse() {
+    try {
+      sessionStorage.setItem(GROUP_COLLAPSE_STATE_KEY, JSON.stringify([...collapsedGroups]));
+    } catch {
+      /* session storage unavailable — collapse state stays in-memory */
+    }
+  }
 
   // ────────────────────────────────────────────────────────────
   // Sidebar shell
@@ -634,6 +655,13 @@ export function initSidebar({ insertText, adjustLayout = () => {} }) {
       return;
     }
 
+    loadGroups()
+      .then((groups) => {
+        lastGroups = groups;
+        paintList();
+      })
+      .catch((err) => console.warn("PromptMate: load groups failed", err));
+
     listPrompts((prompts, meta) => {
       lastPrompts = prompts;
       lastMeta = meta;
@@ -744,15 +772,219 @@ export function initSidebar({ insertText, adjustLayout = () => {} }) {
       pinned.forEach((p) => listEl.appendChild(buildCard(p)));
     }
 
-    if (recent.length) {
-      const lbl = document.createElement("div");
-      lbl.className = "pm-section-label";
-      lbl.textContent = "Recent";
-      listEl.appendChild(lbl);
-      recent.forEach((p) => listEl.appendChild(buildCard(p)));
+    if (!lastGroups.length) {
+      // No groups defined — keep the original flat Recent list.
+      if (recent.length) {
+        const lbl = document.createElement("div");
+        lbl.className = "pm-section-label";
+        lbl.textContent = "Recent";
+        listEl.appendChild(lbl);
+        recent.forEach((p) => listEl.appendChild(buildCard(p)));
+      }
+    } else {
+      const groupIds = new Set(lastGroups.map((g) => g.id));
+      lastGroups.forEach((group) => {
+        listEl.appendChild(
+          buildGroupSection(group, recent.filter((p) => p.group === group.id))
+        );
+      });
+      // Ungrouped catches prompts with no group AND prompts whose group id
+      // can't be resolved (deleted group, or group created on another device).
+      const ungrouped = recent.filter((p) => !p.group || !groupIds.has(p.group));
+      if (ungrouped.length) {
+        listEl.appendChild(
+          buildGroupSection({ id: "__ungrouped__", name: "Ungrouped" }, ungrouped, {
+            isUngrouped: true,
+          })
+        );
+      }
     }
 
     updateSyncIndicator(meta);
+  }
+
+  // ────────────────────────────────────────────────────────────
+  // Groups (Task 30)
+  // ────────────────────────────────────────────────────────────
+  function buildGroupSection(group, prompts, { isUngrouped = false } = {}) {
+    const section = document.createElement("section");
+    section.className = "pm-group";
+    const collapsed = collapsedGroups.has(group.id);
+
+    const header = document.createElement("div");
+    header.className = `pm-group-header${collapsed ? " pm-collapsed" : ""}`;
+    header.setAttribute("role", "button");
+    header.setAttribute("aria-expanded", String(!collapsed));
+
+    const chevron = document.createElement("span");
+    chevron.className = "pm-group-chevron";
+    chevron.innerHTML = `<svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 2.5L8 6l-3.5 3.5"/></svg>`;
+
+    const name = document.createElement("span");
+    name.className = "pm-group-name";
+    name.textContent = group.name;
+
+    const count = document.createElement("span");
+    count.className = "pm-group-count pm-mono";
+    count.textContent = String(prompts.length);
+
+    header.append(chevron, name, count);
+    if (!isUngrouped) header.appendChild(buildGroupMenu(group));
+
+    header.addEventListener("click", () => {
+      if (collapsedGroups.has(group.id)) collapsedGroups.delete(group.id);
+      else collapsedGroups.add(group.id);
+      persistGroupCollapse();
+      paintList();
+    });
+
+    section.appendChild(header);
+
+    if (!collapsed) {
+      const bodyEl = document.createElement("div");
+      bodyEl.className = "pm-group-body";
+      if (!prompts.length) {
+        const empty = document.createElement("div");
+        empty.className = "pm-group-empty";
+        empty.textContent = "No prompts in this group yet.";
+        bodyEl.appendChild(empty);
+      } else {
+        prompts.forEach((p) => bodyEl.appendChild(buildCard(p)));
+      }
+      section.appendChild(bodyEl);
+    }
+
+    return section;
+  }
+
+  function buildGroupMenu(group) {
+    const wrap = document.createElement("div");
+    wrap.className = "pm-menu-wrap pm-group-menu-wrap";
+
+    const btn = document.createElement("button");
+    btn.className = "pm-iconbtn";
+    btn.type = "button";
+    btn.setAttribute("aria-label", `Group actions for ${group.name}`);
+    btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor"><circle cx="3" cy="7" r="1.2"/><circle cx="7" cy="7" r="1.2"/><circle cx="11" cy="7" r="1.2"/></svg>`;
+
+    const menu = document.createElement("div");
+    menu.className = "pm-menu";
+
+    const renderItems = () => {
+      menu.innerHTML = "";
+
+      const rename = document.createElement("button");
+      rename.className = "pm-menu-item";
+      rename.type = "button";
+      rename.textContent = "Rename";
+      rename.addEventListener("click", (e) => {
+        e.stopPropagation();
+        renderRenameForm();
+      });
+
+      const instruction = document.createElement("button");
+      instruction.className = "pm-menu-item";
+      instruction.type = "button";
+      instruction.textContent = "Edit instruction";
+      instruction.addEventListener("click", (e) => {
+        e.stopPropagation();
+        menu.classList.remove("open");
+        openGroupInstructionPopup(group);
+      });
+
+      const del = document.createElement("button");
+      del.className = "pm-menu-item pm-danger";
+      del.type = "button";
+      del.textContent = "Delete group";
+      del.addEventListener("click", (e) => {
+        e.stopPropagation();
+        menu.classList.remove("open");
+        if (!confirm(`Delete group "${group.name}"? Its prompts move to Ungrouped.`)) return;
+        deleteGroup(group.id)
+          .then(() => {
+            collapsedGroups.delete(group.id);
+            persistGroupCollapse();
+            refreshPromptData();
+            showToast("Group deleted. Prompts moved to Ungrouped.");
+          })
+          .catch((err) => {
+            console.warn("PromptMate: delete group failed", err);
+            showToast("Couldn't delete group. Try again.");
+          });
+      });
+
+      menu.append(rename, instruction, del);
+    };
+
+    const renderRenameForm = () => {
+      menu.innerHTML = "";
+      const form = document.createElement("div");
+      form.className = "pm-menu-inline-form";
+      form.addEventListener("click", (e) => e.stopPropagation());
+
+      const input = document.createElement("input");
+      input.className = "pm-input";
+      input.type = "text";
+      input.value = group.name;
+      input.setAttribute("aria-label", "Group name");
+
+      const saveBtn = document.createElement("button");
+      saveBtn.className = "pm-btn pm-btn-primary";
+      saveBtn.type = "button";
+      saveBtn.textContent = "Save";
+      const submit = () => {
+        const name = input.value.trim();
+        if (!name || name === group.name) {
+          menu.classList.remove("open");
+          renderItems();
+          return;
+        }
+        saveGroup({ ...group, name })
+          .then(() => {
+            menu.classList.remove("open");
+            refreshPromptData();
+          })
+          .catch((err) => {
+            console.warn("PromptMate: rename group failed", err);
+            showToast(err?.message?.includes("already exists")
+              ? "A group with that name already exists."
+              : "Couldn't rename group. Try again.");
+          });
+      };
+      saveBtn.addEventListener("click", submit);
+      input.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") submit();
+        if (e.key === "Escape") renderItems();
+      });
+
+      form.append(input, saveBtn);
+      menu.appendChild(form);
+      input.focus();
+      input.select();
+    };
+
+    renderItems();
+
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      document.querySelectorAll(".pm-menu.open").forEach((m) => {
+        if (m !== menu) m.classList.remove("open");
+      });
+      renderItems();
+      menu.classList.toggle("open");
+    });
+
+    document.addEventListener("click", (e) => {
+      if (!wrap.contains(e.target)) menu.classList.remove("open");
+    });
+
+    wrap.append(btn, menu);
+    return wrap;
+  }
+
+  // Placeholder until Task 36 wires the instruction popup.
+  function openGroupInstructionPopup(group) {
+    showToast(`Group instructions for "${group.name}" are coming soon.`);
   }
 
   function paintInsertFailure() {
@@ -955,6 +1187,15 @@ export function initSidebar({ insertText, adjustLayout = () => {} }) {
       openHistoryDrawer(prompt);
     });
 
+    const move = document.createElement("button");
+    move.className = "pm-menu-item";
+    move.type = "button";
+    move.textContent = "Move to group";
+    move.addEventListener("click", (e) => {
+      e.stopPropagation();
+      renderMoveToGroup();
+    });
+
     const del = document.createElement("button");
     del.className = "pm-menu-item pm-danger";
     del.type = "button";
@@ -965,13 +1206,111 @@ export function initSidebar({ insertText, adjustLayout = () => {} }) {
       onDelete(prompt);
     });
 
-    menu.append(pin, copy, edit, hist, del);
+    const renderDefaultItems = () => {
+      menu.replaceChildren(pin, copy, edit, hist, move, del);
+    };
+
+    const movePromptToGroup = (groupId) => {
+      menu.classList.remove("open");
+      savePrompt({ ...prompt, group: groupId })
+        .then(() => refreshPromptData())
+        .catch((err) => {
+          console.warn("PromptMate: move to group failed", err);
+          showToast("Couldn't move prompt. Try again.");
+        });
+    };
+
+    // The 380px sidebar has no room for a positioned submenu — swap the
+    // menu's contents in place instead.
+    const renderMoveToGroup = () => {
+      menu.innerHTML = "";
+
+      const back = document.createElement("button");
+      back.className = "pm-menu-item pm-menu-back";
+      back.type = "button";
+      back.textContent = "← Back";
+      back.addEventListener("click", (e) => {
+        e.stopPropagation();
+        renderDefaultItems();
+      });
+      menu.appendChild(back);
+
+      lastGroups.forEach((g) => {
+        const item = document.createElement("button");
+        item.className = "pm-menu-item";
+        item.type = "button";
+        item.textContent = prompt.group === g.id ? `✓ ${g.name}` : g.name;
+        item.addEventListener("click", (e) => {
+          e.stopPropagation();
+          movePromptToGroup(g.id);
+        });
+        menu.appendChild(item);
+      });
+
+      const ungrouped = document.createElement("button");
+      ungrouped.className = "pm-menu-item";
+      ungrouped.type = "button";
+      ungrouped.textContent = !prompt.group ? "✓ Ungrouped" : "Ungrouped";
+      ungrouped.addEventListener("click", (e) => {
+        e.stopPropagation();
+        movePromptToGroup(null);
+      });
+      menu.appendChild(ungrouped);
+
+      const newGroup = document.createElement("button");
+      newGroup.className = "pm-menu-item";
+      newGroup.type = "button";
+      newGroup.textContent = "New group…";
+      newGroup.addEventListener("click", (e) => {
+        e.stopPropagation();
+        menu.innerHTML = "";
+        const form = document.createElement("div");
+        form.className = "pm-menu-inline-form";
+        form.addEventListener("click", (ev) => ev.stopPropagation());
+
+        const input = document.createElement("input");
+        input.className = "pm-input";
+        input.type = "text";
+        input.placeholder = "Group name";
+        input.setAttribute("aria-label", "New group name");
+
+        const saveBtn = document.createElement("button");
+        saveBtn.className = "pm-btn pm-btn-primary";
+        saveBtn.type = "button";
+        saveBtn.textContent = "Save";
+        const submit = () => {
+          const groupName = input.value.trim();
+          if (!groupName) return;
+          saveGroup({ name: groupName })
+            .then((groupId) => movePromptToGroup(groupId))
+            .catch((err) => {
+              console.warn("PromptMate: create group failed", err);
+              showToast(err?.message?.includes("already exists")
+                ? "A group with that name already exists."
+                : "Couldn't create group. Try again.");
+            });
+        };
+        saveBtn.addEventListener("click", submit);
+        input.addEventListener("keydown", (ev) => {
+          if (ev.key === "Enter") submit();
+          if (ev.key === "Escape") renderMoveToGroup();
+        });
+
+        form.append(input, saveBtn);
+        menu.appendChild(form);
+        input.focus();
+      });
+      menu.appendChild(newGroup);
+    };
+
+    menu.append(pin, copy, edit, hist, move, del);
 
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
       document.querySelectorAll(".pm-menu.open").forEach((m) => {
         if (m !== menu) m.classList.remove("open");
       });
+      renderDefaultItems();
       menu.classList.toggle("open");
     });
 
@@ -1424,20 +1763,26 @@ export function initSidebar({ insertText, adjustLayout = () => {} }) {
     body.className = "pm-modal-body";
 
     const titleField = makeField("pm-title", "Title", "input", "E.g. Improve tone");
+    const groupField = makeGroupSelect(prompt?.group ?? null);
     const bodyField = makeField("pm-prompt-body", "Prompt body", "textarea", "Write your prompt here…");
-    body.append(titleField.wrap, bodyField.wrap);
+    body.append(titleField.wrap, groupField.wrap, bodyField.wrap);
 
-    let initialState = { title: "", body: "" };
+    let initialState = { title: "", body: "", group: prompt?.group ?? null };
     let lastActiveField = titleField.input;
 
     const getCurrentState = () => ({
       title: titleField.input.value,
       body: bodyField.input.value,
+      group: groupField.select.value,
     });
 
     const isDirty = () => {
       const current = getCurrentState();
-      return current.title !== initialState.title || current.body !== initialState.body;
+      return (
+        current.title !== initialState.title ||
+        current.body !== initialState.body ||
+        current.group !== (initialState.group || "")
+      );
     };
 
     const focusLastActiveField = () => {
@@ -1550,7 +1895,7 @@ export function initSidebar({ insertText, adjustLayout = () => {} }) {
     if (overlay) overlay.remove();
   }
 
-  function onSavePrompt(existing) {
+  async function onSavePrompt(existing) {
     const saveBtn = document.querySelector("[data-pm-save-prompt]");
     if (saveBtn?.disabled) return;
 
@@ -1563,6 +1908,26 @@ export function initSidebar({ insertText, adjustLayout = () => {} }) {
 
     setSaveButtonLoading(saveBtn, true);
 
+    let group = document.getElementById("pm-prompt-group")?.value || null;
+    if (group === "__new__") {
+      const newName = document.getElementById("pm-prompt-group-new")?.value.trim();
+      if (!newName) {
+        setSaveButtonLoading(saveBtn, false);
+        showToast("Enter a name for the new group.", "info");
+        return;
+      }
+      try {
+        group = await saveGroup({ name: newName });
+      } catch (err) {
+        console.warn("PromptMate: create group failed", err);
+        setSaveButtonLoading(saveBtn, false);
+        showToast(err?.message?.includes("already exists")
+          ? "A group with that name already exists."
+          : "Couldn't create group. Try again.");
+        return;
+      }
+    }
+
     if (existing) recordAnalytics("edited");
     else recordAnalytics("created");
 
@@ -1574,6 +1939,7 @@ export function initSidebar({ insertText, adjustLayout = () => {} }) {
       format: existing?.format ?? null,
       pinned: existing?.pinned === true,
       used: Number.isFinite(existing?.used) ? existing.used : 0,
+      group,
     })
       .then(() => {
         closePromptModal();
@@ -1596,6 +1962,58 @@ export function initSidebar({ insertText, adjustLayout = () => {} }) {
     } else {
       button.textContent = "Save";
     }
+  }
+
+  function makeGroupSelect(currentGroupId) {
+    const wrap = document.createElement("label");
+    wrap.htmlFor = "pm-prompt-group";
+    wrap.style.display = "flex";
+    wrap.style.flexDirection = "column";
+    wrap.style.gap = "6px";
+
+    const lbl = document.createElement("span");
+    lbl.className = "pm-field-label pm-mono";
+    lbl.textContent = "Group";
+
+    const select = document.createElement("select");
+    select.id = "pm-prompt-group";
+    select.className = "pm-select";
+
+    const none = document.createElement("option");
+    none.value = "";
+    none.textContent = "Ungrouped";
+    select.appendChild(none);
+
+    lastGroups.forEach((g) => {
+      const opt = document.createElement("option");
+      opt.value = g.id;
+      opt.textContent = g.name;
+      select.appendChild(opt);
+    });
+
+    const create = document.createElement("option");
+    create.value = "__new__";
+    create.textContent = "New group…";
+    select.appendChild(create);
+
+    if (currentGroupId && lastGroups.some((g) => g.id === currentGroupId)) {
+      select.value = currentGroupId;
+    }
+
+    const newInput = document.createElement("input");
+    newInput.id = "pm-prompt-group-new";
+    newInput.className = "pm-input";
+    newInput.type = "text";
+    newInput.placeholder = "New group name";
+    newInput.hidden = true;
+
+    select.addEventListener("change", () => {
+      newInput.hidden = select.value !== "__new__";
+      if (!newInput.hidden) newInput.focus();
+    });
+
+    wrap.append(lbl, select, newInput);
+    return { wrap, select, newInput };
   }
 
   function makeField(id, label, kind, placeholder) {

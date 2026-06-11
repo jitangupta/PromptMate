@@ -159,6 +159,7 @@ function normalizePrompt(p) {
     pinned: typeof p.pinned === "boolean" ? p.pinned : false,
     used: Number.isFinite(p.used) ? p.used : 0,
     deletedAt: p.deletedAt || null,
+    group: typeof p.group === "string" ? p.group : null,
   };
 }
 
@@ -334,6 +335,7 @@ async function reconcileFromDrive() {
         createdAt: content.createdAt ?? new Date().toISOString(),
         updatedAt: content.updatedAt ?? meta.modifiedTime ?? new Date().toISOString(),
         deletedAt: content.deletedAt || null,
+        group: typeof content.group === "string" ? content.group : null,
         fileId: meta.fileId,
         etag,
         tier: meta.tier,
@@ -367,6 +369,7 @@ function toDrivePayload(prompt) {
     createdAt: prompt.createdAt,
     updatedAt: prompt.updatedAt,
     deletedAt: prompt.deletedAt || null,
+    group: prompt.group ?? null,
   };
 }
 
@@ -411,6 +414,10 @@ export async function savePrompt(input) {
     createdAt: existing?.createdAt ?? input.createdAt ?? now,
     updatedAt: now,
     deletedAt: input.deletedAt || null,
+    group:
+      input.group !== undefined
+        ? input.group || null
+        : existing?.group ?? null,
   };
 
   // Optimistic cache write.
@@ -630,6 +637,8 @@ export async function importSharedPrompt(externalFileId) {
       createdAt: content.createdAt ?? new Date().toISOString(),
       updatedAt: content.updatedAt ?? new Date().toISOString(),
       deletedAt: content.deletedAt || null,
+      // Group ids are device-local; an imported prompt's group means nothing here.
+      group: null,
       fileId,
       etag,
       tier: "private",
@@ -753,6 +762,103 @@ export function setComposePrefs(prefs) {
   });
 }
 
+// ---- Groups (Task 30) ----
+// Groups are device-local (chrome.storage.local only). The prompt's `group`
+// pointer Drive-syncs, but the group records themselves do not — on another
+// device an unresolvable group id renders as Ungrouped.
+
+export const GROUPS_KEY = "promptmate_groups";
+
+function readGroups() {
+  return new Promise((resolve, reject) => {
+    chrome.storage.local.get({ [GROUPS_KEY]: [] }, (res) => {
+      if (chrome.runtime?.lastError) return reject(chrome.runtime.lastError);
+      resolve(Array.isArray(res[GROUPS_KEY]) ? res[GROUPS_KEY] : []);
+    });
+  });
+}
+
+function writeGroups(groups) {
+  return new Promise((resolve, reject) => {
+    chrome.storage.local.set({ [GROUPS_KEY]: groups }, () => {
+      if (chrome.runtime?.lastError) return reject(chrome.runtime.lastError);
+      resolve();
+    });
+  });
+}
+
+// Serialize group mutations the same way cache mutations are serialized, so
+// a rename racing a delete can't clobber the other's read-modify-write.
+let groupsLock = Promise.resolve();
+async function mutateGroups(fn) {
+  const run = groupsLock.then(async () => {
+    const groups = await readGroups();
+    const next = (await fn(groups)) || groups;
+    await writeGroups(next);
+    return next;
+  });
+  groupsLock = run.catch(() => {});
+  return run;
+}
+
+function normalizeGroup(g) {
+  return {
+    id: g.id,
+    name: typeof g.name === "string" ? g.name : "",
+    instruction: typeof g.instruction === "string" ? g.instruction : "",
+    instructionEnabled: g.instructionEnabled === true,
+  };
+}
+
+export async function loadGroups() {
+  const groups = await readGroups();
+  return groups
+    .map(normalizeGroup)
+    .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
+}
+
+export async function saveGroup(group) {
+  const name = (group?.name || "").trim();
+  if (!name) throw new Error("PromptMate: group name cannot be empty");
+
+  let savedId = group?.id || null;
+  await mutateGroups((groups) => {
+    const duplicate = groups.some(
+      (g) => g.id !== group?.id && g.name.trim().toLowerCase() === name.toLowerCase()
+    );
+    if (duplicate) throw new Error(`PromptMate: a group named "${name}" already exists`);
+
+    const idx = group?.id ? groups.findIndex((g) => g.id === group.id) : -1;
+    if (idx >= 0) {
+      groups[idx] = normalizeGroup({ ...groups[idx], ...group, name });
+    } else {
+      savedId = group?.id || generatePromptId();
+      groups.push(normalizeGroup({ instruction: "", instructionEnabled: false, ...group, id: savedId, name }));
+    }
+    return groups;
+  });
+  return savedId;
+}
+
+export async function deleteGroup(groupId) {
+  if (!groupId) return;
+  await mutateGroups((groups) => groups.filter((g) => g.id !== groupId));
+
+  // Move this group's prompts to Ungrouped. One Drive write per prompt —
+  // acceptable at current library sizes.
+  const cache = await readCache();
+  const affected = Object.values(cache.prompts || {}).filter(
+    (p) => p.group === groupId && !p.deletedAt
+  );
+  for (const p of affected) {
+    try {
+      await savePrompt({ ...p, group: null });
+    } catch (err) {
+      console.warn("PromptMate: failed to ungroup prompt after group delete", p.promptId, err);
+    }
+  }
+}
+
 // ---- Pin / used helpers (used by stages 2 and 4) ----
 
 export async function setPromptPinned(promptId, pinned) {
@@ -808,6 +914,7 @@ export async function restorePromptVersion(promptId, revisionId) {
     pinned: entry.pinned,
     used: entry.used,
     createdAt: entry.createdAt,
+    group: entry.group ?? null,
   });
 }
 
