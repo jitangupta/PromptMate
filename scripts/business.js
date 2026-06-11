@@ -899,6 +899,35 @@ export async function deleteGroup(groupId) {
   }
 }
 
+// ---- New-feature badges (Task 34) ----
+// promptmate_badges holds the feature keys whose "New" badge the user has
+// dismissed (by interacting with the feature). Everything else shows a badge.
+
+export const BADGES_KEY = "promptmate_badges";
+
+export function getDismissedBadges() {
+  return new Promise((resolve, reject) => {
+    chrome.storage.local.get({ [BADGES_KEY]: [] }, (res) => {
+      if (chrome.runtime?.lastError) return reject(chrome.runtime.lastError);
+      const list = Array.isArray(res[BADGES_KEY]) ? res[BADGES_KEY] : [];
+      resolve(new Set(list));
+    });
+  });
+}
+
+export async function dismissBadge(featureKey) {
+  if (!featureKey) return;
+  const dismissed = await getDismissedBadges();
+  if (dismissed.has(featureKey)) return;
+  dismissed.add(featureKey);
+  return new Promise((resolve, reject) => {
+    chrome.storage.local.set({ [BADGES_KEY]: [...dismissed] }, () => {
+      if (chrome.runtime?.lastError) return reject(chrome.runtime.lastError);
+      resolve();
+    });
+  });
+}
+
 // ---- Personal context (Task 36) ----
 // Device-local standing context, prepended to assembled messages when enabled.
 // Deliberately excluded from Drive sync and share/export payloads.

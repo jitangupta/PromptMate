@@ -36,6 +36,8 @@ import {
   loadContextEnabled,
   saveContextEnabled,
   assembleMessage,
+  getDismissedBadges,
+  dismissBadge,
 } from "./business.js";
 
 import {
@@ -108,6 +110,35 @@ export function initSidebar({ insertText, adjustLayout = () => {} }) {
     } catch {
       /* session storage unavailable — collapse state stays in-memory */
     }
+  }
+
+  // "New" feature badges (Task 34). Local Set mirrors storage so the sync
+  // builders can check it; dismissals update the Set first for instant UI.
+  let dismissedBadges = new Set();
+  getDismissedBadges()
+    .then((s) => {
+      dismissedBadges = s;
+    })
+    .catch(() => {});
+
+  function makeNewBadge(featureKey) {
+    if (dismissedBadges.has(featureKey)) return null;
+    const el = document.createElement("span");
+    el.className = "pm-badge-new";
+    el.dataset.pmBadge = featureKey;
+    el.textContent = "New";
+    return el;
+  }
+
+  function dismissFeatureBadge(featureKey) {
+    if (dismissedBadges.has(featureKey)) return;
+    dismissedBadges.add(featureKey);
+    document
+      .querySelectorAll(`[data-pm-badge="${featureKey}"]`)
+      .forEach((el) => el.remove());
+    dismissBadge(featureKey).catch((err) =>
+      console.warn("PromptMate: badge dismiss failed", err)
+    );
   }
 
   // ────────────────────────────────────────────────────────────
@@ -312,8 +343,12 @@ export function initSidebar({ insertText, adjustLayout = () => {} }) {
       syncSettingsUi();
       refreshPromptData();
     });
-    wrap.querySelector("[data-pm-context]").addEventListener("click", () => {
+    const contextItem = wrap.querySelector("[data-pm-context]");
+    const contextBadge = makeNewBadge("feature_context");
+    if (contextBadge) contextItem.appendChild(contextBadge);
+    contextItem.addEventListener("click", () => {
       settingsMenu.classList.remove("open");
+      dismissFeatureBadge("feature_context");
       openContextPopup();
     });
     wrap.querySelector("[data-pm-user-guide]").addEventListener("click", () => {
@@ -802,9 +837,11 @@ export function initSidebar({ insertText, adjustLayout = () => {} }) {
       }
     } else {
       const groupIds = new Set(lastGroups.map((g) => g.id));
-      lastGroups.forEach((group) => {
+      lastGroups.forEach((group, i) => {
         listEl.appendChild(
-          buildGroupSection(group, recent.filter((p) => p.group === group.id))
+          buildGroupSection(group, recent.filter((p) => p.group === group.id), {
+            showNewBadge: i === 0,
+          })
         );
       });
       // Ungrouped catches prompts with no group AND prompts whose group id
@@ -825,7 +862,7 @@ export function initSidebar({ insertText, adjustLayout = () => {} }) {
   // ────────────────────────────────────────────────────────────
   // Groups (Task 30)
   // ────────────────────────────────────────────────────────────
-  function buildGroupSection(group, prompts, { isUngrouped = false } = {}) {
+  function buildGroupSection(group, prompts, { isUngrouped = false, showNewBadge = false } = {}) {
     const section = document.createElement("section");
     section.className = "pm-group";
     const collapsed = collapsedGroups.has(group.id);
@@ -848,9 +885,14 @@ export function initSidebar({ insertText, adjustLayout = () => {} }) {
     count.textContent = String(prompts.length);
 
     header.append(chevron, name, count);
+    if (showNewBadge) {
+      const badge = makeNewBadge("feature_groups");
+      if (badge) header.appendChild(badge);
+    }
     if (!isUngrouped) header.appendChild(buildGroupMenu(group));
 
     header.addEventListener("click", () => {
+      dismissFeatureBadge("feature_groups");
       if (collapsedGroups.has(group.id)) collapsedGroups.delete(group.id);
       else collapsedGroups.add(group.id);
       persistGroupCollapse();
@@ -1413,9 +1455,12 @@ export function initSidebar({ insertText, adjustLayout = () => {} }) {
     previewItem.className = "pm-menu-item";
     previewItem.type = "button";
     previewItem.textContent = "Preview";
+    const previewBadge = makeNewBadge("feature_assembly");
+    if (previewBadge) previewItem.appendChild(previewBadge);
     previewItem.addEventListener("click", (e) => {
       e.stopPropagation();
       menu.classList.remove("open");
+      dismissFeatureBadge("feature_assembly");
       const vars = extractVariables(prompt.body || "");
       if (vars.length) {
         // Variables-first: fill, then preview the filled body (decision 4).
@@ -1472,6 +1517,7 @@ export function initSidebar({ insertText, adjustLayout = () => {} }) {
 
     const movePromptToGroup = (groupId) => {
       menu.classList.remove("open");
+      dismissFeatureBadge("feature_groups");
       savePrompt({ ...prompt, group: groupId })
         .then(() => refreshPromptData())
         .catch((err) => {
@@ -2565,6 +2611,7 @@ export function initSidebar({ insertText, adjustLayout = () => {} }) {
       }
       try {
         group = await saveGroup({ name: newName });
+        dismissFeatureBadge("feature_groups");
       } catch (err) {
         console.warn("PromptMate: create group failed", err);
         setSaveButtonLoading(saveBtn, false);
@@ -2621,6 +2668,10 @@ export function initSidebar({ insertText, adjustLayout = () => {} }) {
     const lbl = document.createElement("span");
     lbl.className = "pm-field-label pm-mono";
     lbl.textContent = "Group";
+    if (!lastGroups.length) {
+      const badge = makeNewBadge("feature_groups");
+      if (badge) lbl.appendChild(badge);
+    }
 
     const select = document.createElement("select");
     select.id = "pm-prompt-group";

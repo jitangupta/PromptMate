@@ -1729,3 +1729,20 @@ ins.pm-diff-ins {
   overflow: hidden;
   word-break: break-word;
 }
+
+/* ── New-feature badges (Task 34) ─────────────────────────── */
+
+.pm-badge-new {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 99px;
+  background: var(--pm-green);
+  color: var(--pm-on-green);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  line-height: 1.4;
+}
