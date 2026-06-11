@@ -58,6 +58,36 @@ export const FORMAT_OPTIONS = [
     }
 ];
 
+// ---- Variables & placeholders (Task 29) ----
+// Single source of truth for the {{variable}} token syntax. Use matchAll /
+// replace / split with this — never .test()/.exec(), which would leak
+// lastIndex state across calls because of the global flag.
+
+export const VAR_RE = /\{\{([^{}]+)\}\}/g;
+
+export function extractVariables(body) {
+  if (typeof body !== "string" || !body) return [];
+  const seen = new Set();
+  const vars = [];
+  for (const m of body.matchAll(VAR_RE)) {
+    const key = m[1].trim();
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    vars.push({ key, label: key, val: "" });
+  }
+  return vars;
+}
+
+export function substituteVariables(body, filled = {}) {
+  if (typeof body !== "string" || !body) return "";
+  return body.replace(VAR_RE, (match, rawKey) => {
+    const key = rawKey.trim();
+    const val = filled[key];
+    // Leave unknown/unfilled tokens intact so nothing is silently dropped.
+    return val !== undefined && val !== null && val !== "" ? String(val) : match;
+  });
+}
+
 // ---- Cache helpers ----
 
 const emptyCache = () => ({
@@ -160,6 +190,9 @@ function normalizePrompt(p) {
     used: Number.isFinite(p.used) ? p.used : 0,
     deletedAt: p.deletedAt || null,
     group: typeof p.group === "string" ? p.group : null,
+    // Legacy prompts saved before Task 29 get vars derived on read so the
+    // badge and fill popup work without a resave.
+    vars: Array.isArray(p.vars) ? p.vars : extractVariables(p.body || ""),
   };
 }
 
@@ -336,6 +369,9 @@ async function reconcileFromDrive() {
         updatedAt: content.updatedAt ?? meta.modifiedTime ?? new Date().toISOString(),
         deletedAt: content.deletedAt || null,
         group: typeof content.group === "string" ? content.group : null,
+        vars: Array.isArray(content.vars)
+          ? content.vars
+          : extractVariables(content.body ?? ""),
         fileId: meta.fileId,
         etag,
         tier: meta.tier,
@@ -370,6 +406,7 @@ function toDrivePayload(prompt) {
     updatedAt: prompt.updatedAt,
     deletedAt: prompt.deletedAt || null,
     group: prompt.group ?? null,
+    vars: Array.isArray(prompt.vars) ? prompt.vars : [],
   };
 }
 
@@ -418,6 +455,9 @@ export async function savePrompt(input) {
       input.group !== undefined
         ? input.group || null
         : existing?.group ?? null,
+    // Always re-derived from the body; never trusted from input. `val` is
+    // session-only fill state and is persisted as "".
+    vars: extractVariables(input.body ?? ""),
   };
 
   // Optimistic cache write.

@@ -26,6 +26,12 @@
   --pm-overlay: oklch(0% 0 0 / 0.55);
   --pm-shadow: 0 1px 2px oklch(0% 0 0 / 0.1), 0 12px 40px oklch(0% 0 0 / 0.25);
 
+  /* Variable chips (violet) — Task 29 */
+  --pm-chip-bg: #201d33;
+  --pm-chip-border: #3a3556;
+  --pm-chip-text: #b9b0ff;
+  --pm-chip-filled-bg: rgba(67, 200, 120, 0.16);
+
   /* Lock width: Claude's host stylesheet has high-specificity rules that
    * otherwise leak in and stretch the panel. !important here is defensive,
    * not stylistic — both hosts must render the panel at exactly 380px. */
@@ -64,6 +70,11 @@
     --pm-kbd-bg: oklch(92% 0.005 95);
     --pm-overlay: oklch(0% 0 0 / 0.4);
     --pm-shadow: 0 1px 2px oklch(0% 0 0 / 0.04), 0 8px 24px oklch(0% 0 0 / 0.08);
+
+    --pm-chip-bg: #efedff;
+    --pm-chip-border: #dad4ff;
+    --pm-chip-text: #5b4fd1;
+    --pm-chip-filled-bg: rgba(67, 200, 120, 0.18);
   }
 }
 
@@ -1453,4 +1464,74 @@ ins.pm-diff-ins {
 .pm-menu-back {
   color: var(--pm-text-2);
   font-size: 11px;
+}
+
+/* ── Variables & placeholders (Task 29) ───────────────────── */
+
+.pm-badge-var {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 7px;
+  border-radius: 6px;
+  background: var(--pm-chip-bg);
+  border: 1px solid var(--pm-chip-border);
+  color: var(--pm-chip-text);
+  font-size: 10.5px;
+  white-space: nowrap;
+}
+
+.pm-chip-var {
+  display: inline;
+  padding: 0 4px;
+  border-radius: 4px;
+  background: var(--pm-chip-bg);
+  border: 1px solid var(--pm-chip-border);
+  color: var(--pm-chip-text);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.pm-chip-var-filled {
+  background: var(--pm-chip-filled-bg);
+  border-color: transparent;
+  color: var(--pm-green);
+  font-family: inherit;
+}
+
+.pm-varfill-subtitle {
+  margin: 4px 0 0;
+  font-size: 11.5px;
+  color: var(--pm-text-2);
+}
+
+.pm-varfill-preview {
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--pm-input-bg);
+  border: 1px solid var(--pm-card-border);
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--pm-text-2);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 140px;
+  overflow-y: auto;
+}
+
+.pm-detected-vars {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pm-detected-vars-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.pm-detected-vars-hint {
+  margin: 0;
+  font-size: 11px;
+  color: var(--pm-text-3);
 }

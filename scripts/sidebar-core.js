@@ -29,6 +29,8 @@ import {
   loadGroups,
   saveGroup,
   deleteGroup,
+  extractVariables,
+  substituteVariables,
 } from "./business.js";
 
 import {
@@ -1034,6 +1036,14 @@ export function initSidebar({ insertText, adjustLayout = () => {} }) {
     useBtn.addEventListener("click", () => onUse(prompt));
     foot.appendChild(useBtn);
 
+    const vars = extractVariables(prompt.body || "");
+    if (vars.length) {
+      const badge = document.createElement("span");
+      badge.className = "pm-badge-var pm-mono";
+      badge.textContent = `${vars.length} variable${vars.length === 1 ? "" : "s"}`;
+      foot.appendChild(badge);
+    }
+
     if (prompt.used > 0) {
       const used = document.createElement("span");
       used.className = "pm-used";
@@ -1325,7 +1335,7 @@ export function initSidebar({ insertText, adjustLayout = () => {} }) {
   // ────────────────────────────────────────────────────────────
   // Compose + Use
   // ────────────────────────────────────────────────────────────
-  function composePromptText(prompt) {
+  function composePromptText(prompt, bodyOverride = null) {
     // Disclosure is the single source of truth. Legacy prompts can have
     // `prompt.tone` / `prompt.format` stored as full {option, category,
     // instruction} objects from older code; falling back to those would
@@ -1333,14 +1343,25 @@ export function initSidebar({ insertText, adjustLayout = () => {} }) {
     // selectors. Don't.
     const tone = TONE_OPTIONS.find((t) => t.option === composePrefs.tone);
     const format = FORMAT_OPTIONS.find((f) => f.option === composePrefs.format);
-    const parts = [prompt.body || ""];
+    const parts = [bodyOverride ?? prompt.body ?? ""];
     if (tone?.instruction) parts.push("", tone.instruction);
     if (format?.instruction) parts.push(format.instruction);
     return parts.join("\n");
   }
 
   function onUse(prompt) {
-    const text = composePromptText(prompt);
+    const vars = extractVariables(prompt.body || "");
+    if (vars.length) {
+      openVarFillPopup(prompt, (filled) =>
+        doInsert(prompt, substituteVariables(prompt.body || "", filled))
+      );
+      return;
+    }
+    doInsert(prompt, null);
+  }
+
+  function doInsert(prompt, bodyOverride) {
+    const text = composePromptText(prompt, bodyOverride);
     const result = insertText(text);
     if (!result.success) {
       insertFailure = { promptId: prompt.promptId, prompt, text };
@@ -1736,6 +1757,142 @@ export function initSidebar({ insertText, adjustLayout = () => {} }) {
   }
 
   // ────────────────────────────────────────────────────────────
+  // Variables (Task 29)
+  // ────────────────────────────────────────────────────────────
+  // Renders `text` into `container` with {{tokens}} as chips — violet while
+  // unfilled, green once a value exists in `filled`. Distinct from
+  // renderTokens(), which renders history diffs.
+  function renderVarChips(text, filled, container) {
+    container.innerHTML = "";
+    const parts = String(text || "").split(/(\{\{[^{}]+\}\})/g);
+    for (const part of parts) {
+      const m = part.match(/^\{\{([^{}]+)\}\}$/);
+      if (!m) {
+        if (part) container.appendChild(document.createTextNode(part));
+        continue;
+      }
+      const key = m[1].trim();
+      const val = filled[key];
+      const chip = document.createElement("span");
+      if (val) {
+        chip.className = "pm-chip-var pm-chip-var-filled";
+        chip.textContent = val;
+      } else {
+        chip.className = "pm-chip-var pm-mono";
+        chip.textContent = `{{${key}}}`;
+      }
+      container.appendChild(chip);
+    }
+  }
+
+  function closeVarFillPopup() {
+    const el = document.getElementById("pm-varfill-overlay");
+    if (el) el.remove();
+  }
+
+  function openVarFillPopup(prompt, onComplete) {
+    closeVarFillPopup();
+    const vars = extractVariables(prompt.body || "");
+    if (!vars.length) {
+      onComplete({});
+      return;
+    }
+
+    const overlay = document.createElement("div");
+    overlay.className = "pm-modal-overlay";
+    overlay.id = "pm-varfill-overlay";
+    overlay.addEventListener("click", (e) => {
+      if (e.target === overlay) closeVarFillPopup();
+    });
+
+    const modal = document.createElement("div");
+    modal.className = "pm-modal";
+    modal.setAttribute("role", "dialog");
+
+    const head = document.createElement("div");
+    head.className = "pm-modal-head";
+    head.innerHTML = `
+      <h2 class="pm-modal-title">Fill in variables</h2>
+      <button class="pm-iconbtn" type="button" aria-label="Close" data-pm-varfill-close>
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M3 3l8 8M11 3l-8 8"/></svg>
+      </button>
+    `;
+    head.querySelector("[data-pm-varfill-close]").addEventListener("click", closeVarFillPopup);
+
+    const subtitle = document.createElement("p");
+    subtitle.className = "pm-varfill-subtitle";
+    subtitle.textContent = `${prompt.title || "(untitled)"} · ${vars.length} variable${vars.length === 1 ? "" : "s"}`;
+    head.appendChild(subtitle);
+
+    const body = document.createElement("div");
+    body.className = "pm-modal-body";
+
+    const detectedLabel = document.createElement("div");
+    detectedLabel.className = "pm-field-label pm-mono";
+    detectedLabel.textContent = `DETECTED VARIABLES · ${vars.length}`;
+    body.appendChild(detectedLabel);
+
+    const filled = {};
+    const inputs = [];
+
+    const previewLabel = document.createElement("div");
+    previewLabel.className = "pm-field-label pm-mono";
+    previewLabel.textContent = "✦ LIVE PREVIEW";
+
+    const preview = document.createElement("div");
+    preview.className = "pm-varfill-preview";
+
+    const insertBtn = document.createElement("button");
+    insertBtn.className = "pm-btn pm-btn-primary";
+    insertBtn.type = "button";
+    insertBtn.textContent = "Insert";
+    insertBtn.disabled = true;
+
+    const syncState = () => {
+      for (const { key, input } of inputs) {
+        const val = input.value.trim();
+        if (val) filled[key] = val;
+        else delete filled[key];
+      }
+      renderVarChips(prompt.body || "", filled, preview);
+      insertBtn.disabled = inputs.some(({ input }) => !input.value.trim());
+    };
+
+    vars.forEach((v) => {
+      const field = makeField(`pm-var-${v.key.replace(/\W+/g, "-")}`, v.key.toUpperCase(), "input", `Value for ${v.key}`);
+      inputs.push({ key: v.key, input: field.input });
+      field.input.addEventListener("input", syncState);
+      body.appendChild(field.wrap);
+    });
+
+    body.append(previewLabel, preview);
+    syncState();
+
+    const foot = document.createElement("div");
+    foot.className = "pm-modal-foot";
+
+    const cancel = document.createElement("button");
+    cancel.className = "pm-btn pm-btn-secondary";
+    cancel.type = "button";
+    cancel.textContent = "Cancel";
+    cancel.addEventListener("click", closeVarFillPopup);
+
+    insertBtn.addEventListener("click", () => {
+      if (insertBtn.disabled) return;
+      closeVarFillPopup();
+      onComplete({ ...filled });
+    });
+
+    foot.append(cancel, insertBtn);
+    modal.append(head, body, foot);
+    overlay.appendChild(modal);
+
+    const sb = document.getElementById(SIDEBAR_ID);
+    (sb || document.body).appendChild(overlay);
+    inputs[0]?.input.focus();
+  }
+
+  // ────────────────────────────────────────────────────────────
   // Modal
   // ────────────────────────────────────────────────────────────
   function openPromptModal(prompt) {
@@ -1766,6 +1923,35 @@ export function initSidebar({ insertText, adjustLayout = () => {} }) {
     const groupField = makeGroupSelect(prompt?.group ?? null);
     const bodyField = makeField("pm-prompt-body", "Prompt body", "textarea", "Write your prompt here…");
     body.append(titleField.wrap, groupField.wrap, bodyField.wrap);
+
+    const varsBlock = document.createElement("div");
+    varsBlock.className = "pm-detected-vars";
+    const varsLabel = document.createElement("div");
+    varsLabel.className = "pm-field-label pm-mono";
+    const varsChips = document.createElement("div");
+    varsChips.className = "pm-detected-vars-chips";
+    const varsHint = document.createElement("p");
+    varsHint.className = "pm-detected-vars-hint";
+    varsHint.textContent = "Wrap any word in {{double braces}} to make it fillable on Use.";
+    varsBlock.append(varsLabel, varsChips, varsHint);
+    body.appendChild(varsBlock);
+
+    const syncDetectedVars = () => {
+      const vars = extractVariables(bodyField.input.value);
+      varsBlock.hidden = false;
+      varsLabel.textContent = vars.length
+        ? `DETECTED VARIABLES · ${vars.length}`
+        : "VARIABLES";
+      varsChips.innerHTML = "";
+      varsChips.hidden = !vars.length;
+      vars.forEach((v) => {
+        const chip = document.createElement("span");
+        chip.className = "pm-chip-var pm-mono";
+        chip.textContent = `{{${v.key}}}`;
+        varsChips.appendChild(chip);
+      });
+    };
+    bodyField.input.addEventListener("input", syncDetectedVars);
 
     let initialState = { title: "", body: "", group: prompt?.group ?? null };
     let lastActiveField = titleField.input;
@@ -1875,6 +2061,7 @@ export function initSidebar({ insertText, adjustLayout = () => {} }) {
     }
 
     initialState = getCurrentState();
+    syncDetectedVars();
     [titleField.input, bodyField.input].forEach((field) => {
       field.addEventListener("focus", () => {
         lastActiveField = field;
