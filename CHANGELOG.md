@@ -11,7 +11,7 @@ Versions correspond to `manifest.json` / `package.json`.
 
 ---
 
-## [0.7.0] — UI & Branding, DeepSeek support, Restore Prompts
+## [0.7.1] — UI & Branding, DeepSeek support, Restore Prompts
 
 ### Added
 - **DeepSeek support** — PromptMate now injects into `chat.deepseek.com` alongside ChatGPT and Claude
