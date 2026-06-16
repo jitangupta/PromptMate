@@ -11,3 +11,10 @@
 
 export const WEB_CLIENT_ID = "REPLACE_WITH_GCP_WEB_CLIENT_ID";
 export const WEB_CLIENT_SECRET = "REPLACE_WITH_GCP_WEB_CLIENT_SECRET";
+
+// GA4 usage analytics (optional — analytics are silently disabled while
+// these are placeholders). From Google Analytics: Admin → Data Streams →
+// pick the Web stream → "Measurement ID" (G-XXXXXXXXXX), then on the same
+// page "Measurement Protocol API secrets" → Create → copy the secret value.
+export const GA4_MEASUREMENT_ID = "REPLACE_WITH_GA4_MEASUREMENT_ID";
+export const GA4_API_SECRET = "REPLACE_WITH_GA4_API_SECRET";

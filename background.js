@@ -3,6 +3,10 @@
 // works on every Chromium browser that ships chrome.identity.
 
 import { WEB_CLIENT_ID, WEB_CLIENT_SECRET } from "./secrets.local.js";
+// Namespace import so builds keep working before GA4_* exports are added to
+// an older secrets.local.js (Rollup only warns on missing namespace members).
+import * as secrets from "./secrets.local.js";
+import { ANALYTICS_MSG_TYPE, ANALYTICS_DISABLED_KEY } from "./scripts/analytics.js";
 
 const AUTH_ENDPOINT = "https://accounts.google.com/o/oauth2/v2/auth";
 const TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token";
@@ -288,12 +292,136 @@ async function handleRefreshToken() {
   return { token };
 }
 
+// ---- GA4 usage analytics (Measurement Protocol) ----
+// Single egress point for analytics: content scripts/popup message events
+// here, and only event names + sanitized scalar params are forwarded to GA.
+// The api_secret ships in the bundle — that's Google's documented model for
+// extensions; the only risk is event spam, not user-data exposure.
+
+const GA_ENDPOINT = "https://www.google-analytics.com/mp/collect";
+const GA_MEASUREMENT_ID = secrets.GA4_MEASUREMENT_ID || "";
+const GA_API_SECRET = secrets.GA4_API_SECRET || "";
+
+const GA_CLIENT_ID_KEY = "promptmate_ga_client_id";
+const GA_SESSION_KEY = "promptmate_ga_session";
+const GA_SNAPSHOT_DATE_KEY = "promptmate_ga_last_snapshot";
+const GA_SESSION_EXPIRATION_MIN = 30;
+
+function gaConfigured() {
+  return (
+    GA_MEASUREMENT_ID.startsWith("G-") &&
+    !!GA_API_SECRET &&
+    !GA_API_SECRET.startsWith("REPLACE_")
+  );
+}
+
+// Random UUID with no connection to the user's Google account, email, or
+// Drive identity — that separation is the core privacy guarantee.
+async function getOrCreateGaClientId() {
+  const stored = await chrome.storage.local.get(GA_CLIENT_ID_KEY);
+  let clientId = stored[GA_CLIENT_ID_KEY];
+  if (!clientId) {
+    clientId = crypto.randomUUID();
+    await chrome.storage.local.set({ [GA_CLIENT_ID_KEY]: clientId });
+  }
+  return clientId;
+}
+
+// GA4 session handling per Google's extension guidance: session id lives in
+// storage.session and rolls over after 30 minutes of inactivity.
+async function getOrCreateGaSessionId() {
+  let { [GA_SESSION_KEY]: session } = await chrome.storage.session.get(GA_SESSION_KEY);
+  const now = Date.now();
+  if (session?.timestamp && (now - session.timestamp) / 60000 <= GA_SESSION_EXPIRATION_MIN) {
+    session.timestamp = now;
+  } else {
+    session = { session_id: String(now), timestamp: now };
+  }
+  await chrome.storage.session.set({ [GA_SESSION_KEY]: session });
+  return session.session_id;
+}
+
+// Last line of defense: regardless of what a caller passes, only short
+// scalar values leave the device. Free text can't slip through by accident.
+function sanitizeGaParams(params) {
+  const clean = {};
+  for (const [key, value] of Object.entries(params || {})) {
+    if (!/^[a-zA-Z][a-zA-Z0-9_]{0,39}$/.test(key)) continue;
+    if (typeof value === "boolean" || typeof value === "number") {
+      clean[key] = value;
+    } else if (typeof value === "string") {
+      clean[key] = value.slice(0, 50);
+    }
+  }
+  return clean;
+}
+
+async function analyticsOptedOut() {
+  const res = await chrome.storage.local.get({ [ANALYTICS_DISABLED_KEY]: false });
+  return res[ANALYTICS_DISABLED_KEY] === true;
+}
+
+async function sendGaEvent(name, params = {}) {
+  if (!gaConfigured()) return { sent: false, reason: "unconfigured" };
+  if (!/^[a-zA-Z][a-zA-Z0-9_]{0,39}$/.test(String(name))) {
+    return { sent: false, reason: "bad-name" };
+  }
+  if (await analyticsOptedOut()) return { sent: false, reason: "opted-out" };
+
+  // library_snapshot is throttled to once per day so library-shape data is
+  // a daily pulse, not an activity trace.
+  if (name === "library_snapshot") {
+    const today = new Date().toISOString().slice(0, 10);
+    const stored = await chrome.storage.local.get(GA_SNAPSHOT_DATE_KEY);
+    if (stored[GA_SNAPSHOT_DATE_KEY] === today) return { sent: false, reason: "throttled" };
+    await chrome.storage.local.set({ [GA_SNAPSHOT_DATE_KEY]: today });
+  }
+
+  const [clientId, sessionId] = await Promise.all([
+    getOrCreateGaClientId(),
+    getOrCreateGaSessionId(),
+  ]);
+
+  const url =
+    `${GA_ENDPOINT}?measurement_id=${encodeURIComponent(GA_MEASUREMENT_ID)}` +
+    `&api_secret=${encodeURIComponent(GA_API_SECRET)}`;
+  await fetch(url, {
+    method: "POST",
+    body: JSON.stringify({
+      client_id: clientId,
+      events: [
+        {
+          name,
+          params: {
+            ...sanitizeGaParams(params),
+            session_id: sessionId,
+            engagement_time_msec: 100,
+            app_version: chrome.runtime.getManifest().version,
+          },
+        },
+      ],
+    }),
+  });
+  return { sent: true };
+}
+
+async function handleAnalyticsTrack(message) {
+  try {
+    return await sendGaEvent(message?.name, message?.params);
+  } catch (err) {
+    // Analytics must never surface errors to the caller's UX.
+    console.warn("PromptMate: analytics send failed", err);
+    return { sent: false, reason: "error" };
+  }
+}
+
 const HANDLERS = {
   [AUTH_MESSAGE.signIn]: handleSignIn,
   [AUTH_MESSAGE.signOut]: handleSignOut,
   [AUTH_MESSAGE.getToken]: handleGetToken,
   [AUTH_MESSAGE.isSignedIn]: handleIsSignedIn,
   [AUTH_MESSAGE.refreshToken]: handleRefreshToken,
+  [ANALYTICS_MSG_TYPE]: handleAnalyticsTrack,
 };
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
@@ -324,6 +452,11 @@ async function seedOnboarding() {
 }
 
 chrome.runtime.onInstalled.addListener((details) => {
+  if (details.reason === "install" || details.reason === "update") {
+    sendGaEvent(
+      details.reason === "install" ? "extension_installed" : "extension_updated"
+    ).catch((err) => console.warn("PromptMate: lifecycle analytics failed", err));
+  }
   if (details.reason !== "install") return;
   seedOnboarding();
 });

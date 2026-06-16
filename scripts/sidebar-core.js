@@ -50,6 +50,15 @@ import {
 import { showToast } from "./toast.js";
 import { copyToClipboard } from "./utility.js";
 
+import {
+  trackEvent,
+  getAnalyticsEnabled,
+  setAnalyticsEnabled,
+  bucketCount,
+  shouldShowAnalyticsNotice,
+  markAnalyticsNoticeShown,
+} from "./analytics.js";
+
 /**
  * @param {object} adapter
  * @param {(text: string) => { success: boolean, error?: string }} adapter.insertText
@@ -90,6 +99,7 @@ export function initSidebar({ insertText, adjustLayout = () => {} }) {
   let lastPrompts = [];
   let lastDeletedPrompts = [];
   let lastMeta = null;
+  let librarySnapshotSent = false;
   let currentQuery = "";
   let currentView = "active";
   let insertFailure = null;
@@ -163,6 +173,16 @@ export function initSidebar({ insertText, adjustLayout = () => {} }) {
     updatePillVisibility();
 
     if (isOpen) {
+      trackEvent("sidebar_opened");
+      shouldShowAnalyticsNotice().then((show) => {
+        if (!show) return;
+        markAnalyticsNoticeShown();
+        showToast(
+          "PromptMate collects anonymous usage stats to improve the product — never your prompts or data. Turn off anytime in the ··· menu.",
+          "info",
+          { duration: 8000 }
+        );
+      });
       refreshAuthState();
       drainPendingWrites().catch((err) => {
         if (isContextInvalidated(err)) {
@@ -321,6 +341,14 @@ export function initSidebar({ insertText, adjustLayout = () => {} }) {
               </span>
               <span>User Guide</span>
             </button>
+            <button class="pm-settings-item" type="button" data-pm-analytics title="Anonymous feature-usage counts only — never your prompts or data">
+              <span class="pm-settings-item-icon">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M3 3v18h18"/><path d="M7 15v3"/><path d="M12 10v8"/><path d="M17 6v12"/>
+                </svg>
+              </span>
+              <span data-pm-analytics-label>Usage stats</span>
+            </button>
           </div>
         </div>
         <button class="pm-iconbtn" type="button" aria-label="Close" data-pm-close>
@@ -350,6 +378,26 @@ export function initSidebar({ insertText, adjustLayout = () => {} }) {
       settingsMenu.classList.remove("open");
       dismissFeatureBadge("feature_context");
       openContextPopup();
+    });
+    const analyticsLabel = wrap.querySelector("[data-pm-analytics-label]");
+    const setAnalyticsLabel = (enabled) => {
+      analyticsLabel.textContent = `Usage stats: ${enabled ? "On" : "Off"}`;
+    };
+    getAnalyticsEnabled().then(setAnalyticsLabel).catch(() => {});
+    wrap.querySelector("[data-pm-analytics]").addEventListener("click", (e) => {
+      e.stopPropagation();
+      getAnalyticsEnabled()
+        .then((enabled) => setAnalyticsEnabled(!enabled).then(() => !enabled))
+        .then((next) => {
+          setAnalyticsLabel(next);
+          showToast(
+            next
+              ? "Anonymous usage stats enabled."
+              : "Usage stats off — nothing is sent.",
+            "info"
+          );
+        })
+        .catch(() => {});
     });
     wrap.querySelector("[data-pm-user-guide]").addEventListener("click", () => {
       settingsMenu.classList.remove("open");
@@ -447,6 +495,7 @@ export function initSidebar({ insertText, adjustLayout = () => {} }) {
     `;
     const dismiss = (action) => {
       ratingPromptReady = false;
+      trackEvent("rating_prompt", { action });
       dismissRatingPrompt(action).catch(() => {});
       const el = document.getElementById("pm-rating-banner");
       if (el) el.remove();
@@ -690,7 +739,9 @@ export function initSidebar({ insertText, adjustLayout = () => {} }) {
     btn.disabled = !!authState.loading;
     btn.textContent = authState.loading ? "Signing in…" : "Sign in with Google";
     btn.addEventListener("click", () =>
-      performSignIn().catch((err) => console.warn("PromptMate: sign-in failed", err))
+      performSignIn()
+        .then(() => trackEvent("sign_in_completed"))
+        .catch((err) => console.warn("PromptMate: sign-in failed", err))
     );
     wrap.appendChild(btn);
     return wrap;
@@ -719,6 +770,15 @@ export function initSidebar({ insertText, adjustLayout = () => {} }) {
     listPrompts((prompts, meta) => {
       lastPrompts = prompts;
       lastMeta = meta;
+      // Daily library-shape pulse: coarse buckets only, after the Drive
+      // reconcile so counts are real. Background dedupes to once per day.
+      if (!meta.fromCache && !librarySnapshotSent) {
+        librarySnapshotSent = true;
+        trackEvent("library_snapshot", {
+          prompt_bucket: bucketCount(prompts.length),
+          group_bucket: bucketCount(lastGroups.length),
+        });
+      }
       paintList();
     });
   }
@@ -963,6 +1023,7 @@ export function initSidebar({ insertText, adjustLayout = () => {} }) {
         if (!confirm(`Delete group "${group.name}"? Its prompts move to Ungrouped.`)) return;
         deleteGroup(group.id)
           .then(() => {
+            trackEvent("group_deleted");
             collapsedGroups.delete(group.id);
             persistGroupCollapse();
             refreshPromptData();
@@ -1166,11 +1227,12 @@ export function initSidebar({ insertText, adjustLayout = () => {} }) {
         save.type = "button";
         save.textContent = context ? "Save" : "Add context";
         save.addEventListener("click", () => {
-          Promise.all([
-            saveContext(field.input.value.trim()),
-            saveContextEnabled(enabledSwitch.value),
-          ])
+          const contextText = field.input.value.trim();
+          const contextOn = enabledSwitch.value;
+          Promise.all([saveContext(contextText), saveContextEnabled(contextOn)])
             .then(() => {
+              // Booleans only — the context text itself never leaves the device.
+              trackEvent("context_saved", { enabled: contextOn, has_text: !!contextText });
               close();
               showToast("Context saved.", "success");
             })
@@ -1240,12 +1302,14 @@ export function initSidebar({ insertText, adjustLayout = () => {} }) {
     save.type = "button";
     save.textContent = "Save";
     save.addEventListener("click", () => {
+      const instructionEnabled = enabledSwitch.value;
       saveGroup({
         ...group,
         instruction: field.input.value.trim(),
-        instructionEnabled: enabledSwitch.value,
+        instructionEnabled,
       })
         .then(() => {
+          trackEvent("group_instruction_saved", { enabled: instructionEnabled });
           close();
           refreshPromptData();
           showToast("Group instruction saved.", "success");
@@ -1353,6 +1417,7 @@ export function initSidebar({ insertText, adjustLayout = () => {} }) {
         return;
       }
       recordAnalytics("copied");
+      trackEvent("prompt_copied", { after_insert_failure: true });
       copyBtn.textContent = "Copied!";
       setTimeout(() => {
         copyBtn.textContent = "Copy";
@@ -1588,7 +1653,10 @@ export function initSidebar({ insertText, adjustLayout = () => {} }) {
           const groupName = input.value.trim();
           if (!groupName) return;
           saveGroup({ name: groupName })
-            .then((groupId) => movePromptToGroup(groupId))
+            .then((groupId) => {
+              trackEvent("group_created");
+              movePromptToGroup(groupId);
+            })
             .catch((err) => {
               console.warn("PromptMate: create group failed", err);
               showToast(err?.message?.includes("already exists")
@@ -1691,10 +1759,17 @@ export function initSidebar({ insertText, adjustLayout = () => {} }) {
       insertFailure = { promptId: prompt.promptId, prompt, text };
       paintList();
       showToast("PromptMate couldn't insert automatically. Use Copy in the sidebar.");
+      // Early warning for host-site selector regressions, per host.
+      trackEvent("insert_failed");
       return false;
     }
     clearInsertFailure();
     recordAnalytics("used");
+    trackEvent("prompt_used", {
+      tone: composePrefs.tone || "none",
+      format: composePrefs.format || "none",
+      has_variables: extractVariables(prompt.body || "").length > 0,
+    });
     incrementPromptUsed(prompt.promptId)
       .then(() => refreshPromptData())
       .catch((err) => {
@@ -1708,7 +1783,10 @@ export function initSidebar({ insertText, adjustLayout = () => {} }) {
     buildAssembledText(prompt)
       .then((text) => copyToClipboard(text))
       .then((copied) => {
-        if (copied) recordAnalytics("copied");
+        if (copied) {
+          recordAnalytics("copied");
+          trackEvent("prompt_copied");
+        }
       })
       .catch((err) => {
         console.warn("PromptMate: copy failed", err);
@@ -1724,7 +1802,10 @@ export function initSidebar({ insertText, adjustLayout = () => {} }) {
 
   function onTogglePin(prompt) {
     setPromptPinned(prompt.promptId, !prompt.pinned)
-      .then(() => refreshPromptData())
+      .then(() => {
+        trackEvent("pin_toggled", { pinned: !prompt.pinned });
+        refreshPromptData();
+      })
       .catch((err) => {
         console.warn("PromptMate: pin toggle failed", err);
         showToast(
@@ -1738,6 +1819,7 @@ export function initSidebar({ insertText, adjustLayout = () => {} }) {
 
   function onDelete(prompt) {
     recordAnalytics("deleted");
+    trackEvent("prompt_deleted");
     softDeletePrompt(prompt.promptId)
       .then(() => {
         refreshPromptData();
@@ -1770,6 +1852,7 @@ export function initSidebar({ insertText, adjustLayout = () => {} }) {
   function onRestoreDeleted(prompt) {
     restorePrompt(prompt.promptId)
       .then(() => {
+        trackEvent("prompt_restored");
         refreshPromptData();
         showToast("Prompt restored.", "info");
       })
@@ -1914,6 +1997,7 @@ export function initSidebar({ insertText, adjustLayout = () => {} }) {
 
   function openHistoryDrawer(prompt) {
     closeHistoryDrawer();
+    trackEvent("history_opened");
 
     const overlay = document.createElement("div");
     overlay.className = "pm-modal-overlay";
@@ -2053,6 +2137,7 @@ export function initSidebar({ insertText, adjustLayout = () => {} }) {
               restoreBtn.disabled = true;
               restorePromptVersion(prompt.promptId, rev.id)
                 .then(() => {
+                  trackEvent("version_restored");
                   closeHistoryDrawer();
                   refreshPromptData();
                   showToast("Prompt restored.");
@@ -2092,6 +2177,7 @@ export function initSidebar({ insertText, adjustLayout = () => {} }) {
   // ────────────────────────────────────────────────────────────
   async function openAssemblyPreview(prompt, filledBody = null) {
     document.getElementById("pm-assembly-overlay")?.remove();
+    trackEvent("preview_opened");
 
     let context, contextEnabled, groups;
     try {
@@ -2385,6 +2471,7 @@ export function initSidebar({ insertText, adjustLayout = () => {} }) {
 
     insertBtn.addEventListener("click", () => {
       if (insertBtn.disabled) return;
+      trackEvent("variables_filled", { var_count: vars.length });
       closeVarFillPopup();
       onComplete({ ...filled });
     });
@@ -2611,6 +2698,7 @@ export function initSidebar({ insertText, adjustLayout = () => {} }) {
       }
       try {
         group = await saveGroup({ name: newName });
+        trackEvent("group_created");
         dismissFeatureBadge("feature_groups");
       } catch (err) {
         console.warn("PromptMate: create group failed", err);
@@ -2624,6 +2712,10 @@ export function initSidebar({ insertText, adjustLayout = () => {} }) {
 
     if (existing) recordAnalytics("edited");
     else recordAnalytics("created");
+    trackEvent(existing ? "prompt_edited" : "prompt_created", {
+      has_variables: extractVariables(body).length > 0,
+      has_group: !!group,
+    });
 
     savePrompt({
       promptId: existing?.promptId,
