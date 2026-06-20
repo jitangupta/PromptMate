@@ -26,6 +26,12 @@
   --pm-overlay: oklch(0% 0 0 / 0.55);
   --pm-shadow: 0 1px 2px oklch(0% 0 0 / 0.1), 0 12px 40px oklch(0% 0 0 / 0.25);
 
+  /* Variable chips (violet) — Task 29 */
+  --pm-chip-bg: #201d33;
+  --pm-chip-border: #3a3556;
+  --pm-chip-text: #b9b0ff;
+  --pm-chip-filled-bg: rgba(67, 200, 120, 0.16);
+
   /* Lock width: Claude's host stylesheet has high-specificity rules that
    * otherwise leak in and stretch the panel. !important here is defensive,
    * not stylistic — both hosts must render the panel at exactly 380px. */
@@ -64,6 +70,11 @@
     --pm-kbd-bg: oklch(92% 0.005 95);
     --pm-overlay: oklch(0% 0 0 / 0.4);
     --pm-shadow: 0 1px 2px oklch(0% 0 0 / 0.04), 0 8px 24px oklch(0% 0 0 / 0.08);
+
+    --pm-chip-bg: #efedff;
+    --pm-chip-border: #dad4ff;
+    --pm-chip-text: #5b4fd1;
+    --pm-chip-filled-bg: rgba(67, 200, 120, 0.18);
   }
 }
 
@@ -231,6 +242,26 @@
 
 .pm-search-input::placeholder {
   color: var(--pm-text-3);
+}
+
+.pm-search-input::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.pm-search-clear {
+  align-items: center;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--pm-text-2);
+  font-size: 16px;
+  line-height: 1;
+  padding: 0 2px;
+  flex: 0 0 auto;
+}
+.pm-search-clear:hover {
+  color: var(--pm-text);
 }
 
 .pm-kbd {
@@ -1262,6 +1293,11 @@ ins.pm-diff-ins {
   display: none;
 }
 
+.pm-pill.pm-active {
+  opacity: 0.75;
+  box-shadow: 0 0 0 2px oklch(72% 0.16 152 / 0.6);
+}
+
 /* ── Scrollbars (subtle, host-agnostic) ────────────────────── */
 .pm-list::-webkit-scrollbar,
 .pm-modal-body::-webkit-scrollbar {
@@ -1368,4 +1404,370 @@ ins.pm-diff-ins {
     background: oklch(96% 0.035 152);
     border-color: oklch(72% 0.13 152);
   }
+}
+
+/* ── Groups (Task 30) ─────────────────────────────────────── */
+
+.pm-group {
+  margin-bottom: 6px;
+}
+
+.pm-group-header {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 4px 7px;
+  cursor: pointer;
+  user-select: none;
+  border-radius: 8px;
+}
+
+.pm-group-header:hover {
+  background: var(--pm-card-hover);
+}
+
+.pm-group-chevron {
+  display: inline-flex;
+  align-items: center;
+  color: var(--pm-text-3);
+  transition: transform 0.15s ease;
+  transform: rotate(90deg);
+}
+
+.pm-group-header.pm-collapsed .pm-group-chevron {
+  transform: rotate(0deg);
+}
+
+.pm-group-name {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--pm-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pm-group-count {
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--pm-kbd-bg);
+  font-size: 10.5px;
+  color: var(--pm-text-2);
+}
+
+.pm-group-menu-wrap {
+  margin-left: auto;
+}
+
+.pm-group-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 4px 0 2px;
+}
+
+.pm-group-empty {
+  padding: 10px 12px;
+  font-size: 11.5px;
+  color: var(--pm-text-3);
+  border: 1px dashed var(--pm-card-border);
+  border-radius: 10px;
+}
+
+.pm-menu-inline-form {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px;
+}
+
+.pm-menu-inline-form .pm-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.pm-menu-back {
+  color: var(--pm-text-2);
+  font-size: 11px;
+}
+
+/* ── Variables & placeholders (Task 29) ───────────────────── */
+
+.pm-badge-var {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 7px;
+  border-radius: 6px;
+  background: var(--pm-chip-bg);
+  border: 1px solid var(--pm-chip-border);
+  color: var(--pm-chip-text);
+  font-size: 10.5px;
+  white-space: nowrap;
+}
+
+.pm-chip-var {
+  display: inline;
+  padding: 0 4px;
+  border-radius: 4px;
+  background: var(--pm-chip-bg);
+  border: 1px solid var(--pm-chip-border);
+  color: var(--pm-chip-text);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.pm-chip-var-filled {
+  background: var(--pm-chip-filled-bg);
+  border-color: transparent;
+  color: var(--pm-green);
+  font-family: inherit;
+}
+
+.pm-varfill-subtitle {
+  margin: 4px 0 0;
+  font-size: 11.5px;
+  color: var(--pm-text-2);
+}
+
+.pm-varfill-preview {
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--pm-input-bg);
+  border: 1px solid var(--pm-card-border);
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--pm-text-2);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 140px;
+  overflow-y: auto;
+}
+
+.pm-detected-vars {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pm-detected-vars-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.pm-detected-vars-hint {
+  margin: 0;
+  font-size: 11px;
+  color: var(--pm-text-3);
+}
+
+/* ── Context & group instructions (Task 36) ───────────────── */
+
+.pm-switch {
+  position: relative;
+  flex: none;
+  width: 38px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: var(--pm-card-border);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.pm-switch.pm-on {
+  background: var(--pm-green);
+}
+
+.pm-switch-knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px oklch(0% 0 0 / 0.3);
+  transition: transform 0.15s ease;
+}
+
+.pm-switch.pm-on .pm-switch-knob {
+  transform: translateX(16px);
+}
+
+.pm-toggle-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--pm-card);
+  border: 1px solid var(--pm-card-border);
+}
+
+.pm-toggle-card-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.pm-toggle-card-title {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--pm-text);
+}
+
+.pm-toggle-card-desc {
+  font-size: 11px;
+  color: var(--pm-text-3);
+}
+
+.pm-context-pull {
+  align-self: flex-start;
+  font-size: 12px;
+}
+
+.pm-privacy-note {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-top: 10px;
+  border-top: 1px solid var(--pm-border);
+  font-size: 11px;
+  color: var(--pm-text-3);
+}
+
+.pm-info-callout {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 9px 11px;
+  border-radius: 10px;
+  background: var(--pm-chip-bg);
+  border: 1px solid var(--pm-chip-border);
+  color: var(--pm-chip-text);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.pm-info-callout svg {
+  flex: none;
+  margin-top: 1px;
+}
+
+/* ── Assembly preview (Task 37) ───────────────────────────── */
+
+.pm-layers {
+  display: flex;
+  flex-direction: column;
+}
+
+.pm-layer-row {
+  display: flex;
+  gap: 11px;
+}
+
+.pm-layer-rail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: none;
+  width: 10px;
+  padding-top: 14px;
+}
+
+.pm-layer-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--pm-text-3);
+}
+
+.pm-layer-dot.pm-on {
+  background: var(--pm-green);
+}
+
+.pm-layer-connector {
+  width: 2px;
+  flex: 1;
+  background: var(--pm-border);
+  margin: 4px 0;
+}
+
+.pm-layer-card {
+  flex: 1;
+  min-width: 0;
+  margin-bottom: 10px;
+  padding: 10px 12px;
+  border-radius: 11px;
+  background: var(--pm-card);
+  border: 1px solid var(--pm-card-border);
+  transition: opacity 0.15s ease;
+}
+
+.pm-layer-card.pm-layer-off {
+  opacity: 0.45;
+}
+
+.pm-layer-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.pm-layer-tag {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--pm-text);
+}
+
+.pm-layer-kind {
+  font-size: 11px;
+  color: var(--pm-text-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pm-layer-spacer {
+  flex: 1;
+}
+
+.pm-layer-required {
+  font-size: 9.5px;
+  letter-spacing: 0.06em;
+  color: var(--pm-text-3);
+}
+
+.pm-layer-text {
+  margin: 6px 0 0;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--pm-text-2);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  word-break: break-word;
+}
+
+/* ── New-feature badges (Task 34) ─────────────────────────── */
+
+.pm-badge-new {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 99px;
+  background: var(--pm-green);
+  color: var(--pm-on-green);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  line-height: 1.4;
 }

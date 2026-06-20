@@ -27,6 +27,8 @@ function buildFileBody(prompt) {
     createdAt: prompt.createdAt ?? now,
     updatedAt: prompt.updatedAt ?? now,
     deletedAt: prompt.deletedAt || null,
+    group: prompt.group ?? null,
+    vars: Array.isArray(prompt.vars) ? prompt.vars : [],
   };
   return body;
 }
