@@ -244,6 +244,26 @@
   color: var(--pm-text-3);
 }
 
+.pm-search-input::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.pm-search-clear {
+  align-items: center;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--pm-text-2);
+  font-size: 16px;
+  line-height: 1;
+  padding: 0 2px;
+  flex: 0 0 auto;
+}
+.pm-search-clear:hover {
+  color: var(--pm-text);
+}
+
 .pm-kbd {
   font-size: 10px;
   color: var(--pm-text-3);
@@ -1271,6 +1291,11 @@ ins.pm-diff-ins {
 
 .pm-pill.pm-hidden {
   display: none;
+}
+
+.pm-pill.pm-active {
+  opacity: 0.75;
+  box-shadow: 0 0 0 2px oklch(72% 0.16 152 / 0.6);
 }
 
 /* ── Scrollbars (subtle, host-agnostic) ────────────────────── */

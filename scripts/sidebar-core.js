@@ -72,6 +72,20 @@ export function initSidebar({ insertText, adjustLayout = () => {} }) {
   const SIDEBAR_WIDTH = 380;
   const COMPOSE_DISCLOSURE_STATE_KEY = "promptmate.composeDisclosureOpen";
   const BRAND_ICON_URL = chrome.runtime.getURL("icons/icon128.png");
+
+  if (process.env.BUILD !== 'production') {
+    (function applyTestStateFromURL() {
+      const params = new URLSearchParams(location.search);
+      const key = params.get('pm_test_key');
+      const raw = params.get('pm_test_value');
+      if (!key || !raw) return;
+      try {
+        chrome.storage.local.set({ [key]: JSON.parse(raw) }, () => location.reload());
+      } catch (e) {
+        console.warn('[PromptMate test hook] Invalid pm_test_value JSON', e);
+      }
+    })();
+  }
   const REVIEW_URL = `https://chrome.google.com/webstore/detail/${chrome.runtime.id}/reviews`;
 
   let composePrefs = { tone: null, format: null };
@@ -218,7 +232,8 @@ export function initSidebar({ insertText, adjustLayout = () => {} }) {
     if (!pill) return;
     const sb = document.getElementById(SIDEBAR_ID);
     const isOpen = sb && sb.classList.contains("pm-open");
-    pill.classList.toggle("pm-hidden", !!isOpen);
+    pill.classList.toggle("pm-active", !!isOpen);
+    pill.setAttribute("aria-label", isOpen ? "Close PromptMate" : "Open PromptMate");
   }
 
   function createSidebar() {
@@ -367,6 +382,8 @@ export function initSidebar({ insertText, adjustLayout = () => {} }) {
       currentQuery = "";
       const search = document.querySelector(".pm-search-input");
       if (search) search.value = "";
+      const searchClear = document.querySelector(".pm-search-clear");
+      if (searchClear) searchClear.style.display = "none";
       settingsMenu.classList.remove("open");
       syncSettingsUi();
       refreshPromptData();
@@ -515,9 +532,26 @@ export function initSidebar({ insertText, adjustLayout = () => {} }) {
       <input class="pm-search-input" type="search" placeholder="Search prompts…" />
     `;
     const input = wrap.querySelector(".pm-search-input");
+
+    const clearBtn = document.createElement("button");
+    clearBtn.className = "pm-search-clear";
+    clearBtn.setAttribute("aria-label", "Clear search");
+    clearBtn.textContent = "×";
+    clearBtn.style.display = "none";
+    clearBtn.addEventListener("click", () => {
+      input.value = "";
+      currentQuery = "";
+      clearBtn.style.display = "none";
+      paintList();
+      input.focus();
+    });
+    wrap.appendChild(clearBtn);
+
     input.value = currentQuery;
+    if (currentQuery) clearBtn.style.display = "inline-flex";
     input.addEventListener("input", () => {
       currentQuery = input.value;
+      clearBtn.style.display = input.value ? "inline-flex" : "none";
       paintList();
     });
     return wrap;
