@@ -11,6 +11,16 @@ Versions correspond to `manifest.json` / `package.json`.
 
 ---
 
+## [0.8.0] — Variables, Prompt Groups & User Context
+
+### Added
+- **Variables in Prompts** — embed `{{variable}}` placeholders in any prompt; a fill-in dialog appears before the prompt is sent so values are substituted on the fly
+- **Prompt Groups** — organise prompts into named groups; the sidebar shows prompts grouped for faster browsing and less clutter
+- **Group Instructions** — attach a shared instruction to a group that automatically prepends to every prompt inside it, removing the need to repeat context per prompt
+- **User Context** — set a persistent personal context (role, background, preferences) that is appended to every outgoing prompt across all platforms
+
+---
+
 ## [0.7.1] — UI & Branding, DeepSeek support, Restore Prompts
 
 ### Added

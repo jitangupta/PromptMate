@@ -1099,7 +1099,7 @@ export function dismissOnboardingGuide() {
 // ---- What's New state ----
 
 export const WHATS_NEW_KEY = "promptmate.whatsNew";
-export const WHATS_NEW_VERSION = "0.7.1";
+export const WHATS_NEW_VERSION = "0.8.0";
 export const RATING_PROMPT_KEY = "promptmate.ratingPrompt";
 const RATING_PROMPT_DELAY_MS = 7 * 24 * 60 * 60 * 1000;
 

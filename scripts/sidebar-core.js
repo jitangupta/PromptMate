@@ -478,8 +478,9 @@ export function initSidebar({ insertText, adjustLayout = () => {} }) {
     banner.innerHTML = `
       <div class="pm-whats-new-content">
         <span class="pm-whats-new-badge">New in v${WHATS_NEW_VERSION}</span>
-        <strong class="pm-whats-new-title">DeepSeek support + prompt recovery</strong>
-        <p class="pm-whats-new-desc">PromptMate now works on DeepSeek. You can also open the <strong>···</strong> menu and choose <strong>Recently deleted</strong> to restore deleted prompts before they expire.</p>
+        <strong class="pm-whats-new-title">Variables, Groups &amp; User Context</strong>
+        <p class="pm-whats-new-desc">Add <strong>{{variables}}</strong> to any prompt and fill them in before sending. Organise prompts into <strong>Groups</strong> with shared instructions. Set a <strong>User Context</strong> that travels with every prompt you send.</p>
+        <a class="pm-rating-link" href="https://jitangupta.com/promptmate/whats-new" target="_blank" rel="noopener noreferrer">See what's new →</a>
       </div>
       <button class="pm-iconbtn pm-whats-new-dismiss" type="button" aria-label="Dismiss">
         <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M2 2l10 10M12 2l-10 10"/></svg>
