@@ -231,3 +231,12 @@ section {
   text-decoration: underline;
   text-underline-offset: 2px;
 }
+
+.whats-new-list code {
+  font-family: ui-monospace, "Cascadia Code", "Fira Code", monospace;
+  font-size: 11px;
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: #efede8;
+  color: var(--text);
+}

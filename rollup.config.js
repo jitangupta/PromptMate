@@ -1,11 +1,16 @@
 import resolve from '@rollup/plugin-node-resolve';
 import commonjs from '@rollup/plugin-commonjs';
+import replace from '@rollup/plugin-replace';
 import { terser } from 'rollup-plugin-terser';
 import postcss from 'rollup-plugin-postcss';
 
 const isProd = process.env.BUILD === 'production';
 
 const maybeTerser = () => (isProd ? [terser()] : []);
+const buildReplace = () => replace({
+  'process.env.BUILD': JSON.stringify(process.env.BUILD || 'development'),
+  preventAssignment: true,
+});
 
 export default [
   {
@@ -16,6 +21,7 @@ export default [
       sourcemap: true
     },
     plugins: [
+      buildReplace(),
       resolve(),
       commonjs(),
       postcss({
@@ -34,6 +40,7 @@ export default [
       sourcemap: true
     },
     plugins: [
+      buildReplace(),
       resolve(),
       commonjs(),
       postcss({
@@ -52,6 +59,7 @@ export default [
       sourcemap: true
     },
     plugins: [
+      buildReplace(),
       resolve(),
       commonjs(),
       postcss({
@@ -70,6 +78,7 @@ export default [
       sourcemap: true
     },
     plugins: [
+      buildReplace(),
       resolve(),
       commonjs(),
       postcss({
@@ -88,6 +97,7 @@ export default [
       sourcemap: true
     },
     plugins: [
+      buildReplace(),
       resolve(),
       commonjs(),
       ...maybeTerser()

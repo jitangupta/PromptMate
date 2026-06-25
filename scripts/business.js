@@ -58,6 +58,36 @@ export const FORMAT_OPTIONS = [
     }
 ];
 
+// ---- Variables & placeholders (Task 29) ----
+// Single source of truth for the {{variable}} token syntax. Use matchAll /
+// replace / split with this — never .test()/.exec(), which would leak
+// lastIndex state across calls because of the global flag.
+
+export const VAR_RE = /\{\{([^{}]+)\}\}/g;
+
+export function extractVariables(body) {
+  if (typeof body !== "string" || !body) return [];
+  const seen = new Set();
+  const vars = [];
+  for (const m of body.matchAll(VAR_RE)) {
+    const key = m[1].trim();
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    vars.push({ key, label: key, val: "" });
+  }
+  return vars;
+}
+
+export function substituteVariables(body, filled = {}) {
+  if (typeof body !== "string" || !body) return "";
+  return body.replace(VAR_RE, (match, rawKey) => {
+    const key = rawKey.trim();
+    const val = filled[key];
+    // Leave unknown/unfilled tokens intact so nothing is silently dropped.
+    return val !== undefined && val !== null && val !== "" ? String(val) : match;
+  });
+}
+
 // ---- Cache helpers ----
 
 const emptyCache = () => ({
@@ -159,6 +189,10 @@ function normalizePrompt(p) {
     pinned: typeof p.pinned === "boolean" ? p.pinned : false,
     used: Number.isFinite(p.used) ? p.used : 0,
     deletedAt: p.deletedAt || null,
+    group: typeof p.group === "string" ? p.group : null,
+    // Legacy prompts saved before Task 29 get vars derived on read so the
+    // badge and fill popup work without a resave.
+    vars: Array.isArray(p.vars) ? p.vars : extractVariables(p.body || ""),
   };
 }
 
@@ -334,6 +368,10 @@ async function reconcileFromDrive() {
         createdAt: content.createdAt ?? new Date().toISOString(),
         updatedAt: content.updatedAt ?? meta.modifiedTime ?? new Date().toISOString(),
         deletedAt: content.deletedAt || null,
+        group: typeof content.group === "string" ? content.group : null,
+        vars: Array.isArray(content.vars)
+          ? content.vars
+          : extractVariables(content.body ?? ""),
         fileId: meta.fileId,
         etag,
         tier: meta.tier,
@@ -367,6 +405,8 @@ function toDrivePayload(prompt) {
     createdAt: prompt.createdAt,
     updatedAt: prompt.updatedAt,
     deletedAt: prompt.deletedAt || null,
+    group: prompt.group ?? null,
+    vars: Array.isArray(prompt.vars) ? prompt.vars : [],
   };
 }
 
@@ -411,6 +451,13 @@ export async function savePrompt(input) {
     createdAt: existing?.createdAt ?? input.createdAt ?? now,
     updatedAt: now,
     deletedAt: input.deletedAt || null,
+    group:
+      input.group !== undefined
+        ? input.group || null
+        : existing?.group ?? null,
+    // Always re-derived from the body; never trusted from input. `val` is
+    // session-only fill state and is persisted as "".
+    vars: extractVariables(input.body ?? ""),
   };
 
   // Optimistic cache write.
@@ -630,6 +677,8 @@ export async function importSharedPrompt(externalFileId) {
       createdAt: content.createdAt ?? new Date().toISOString(),
       updatedAt: content.updatedAt ?? new Date().toISOString(),
       deletedAt: content.deletedAt || null,
+      // Group ids are device-local; an imported prompt's group means nothing here.
+      group: null,
       fileId,
       etag,
       tier: "private",
@@ -753,6 +802,198 @@ export function setComposePrefs(prefs) {
   });
 }
 
+// ---- Groups (Task 30) ----
+// Groups are device-local (chrome.storage.local only). The prompt's `group`
+// pointer Drive-syncs, but the group records themselves do not — on another
+// device an unresolvable group id renders as Ungrouped.
+
+export const GROUPS_KEY = "promptmate_groups";
+
+function readGroups() {
+  return new Promise((resolve, reject) => {
+    chrome.storage.local.get({ [GROUPS_KEY]: [] }, (res) => {
+      if (chrome.runtime?.lastError) return reject(chrome.runtime.lastError);
+      resolve(Array.isArray(res[GROUPS_KEY]) ? res[GROUPS_KEY] : []);
+    });
+  });
+}
+
+function writeGroups(groups) {
+  return new Promise((resolve, reject) => {
+    chrome.storage.local.set({ [GROUPS_KEY]: groups }, () => {
+      if (chrome.runtime?.lastError) return reject(chrome.runtime.lastError);
+      resolve();
+    });
+  });
+}
+
+// Serialize group mutations the same way cache mutations are serialized, so
+// a rename racing a delete can't clobber the other's read-modify-write.
+let groupsLock = Promise.resolve();
+async function mutateGroups(fn) {
+  const run = groupsLock.then(async () => {
+    const groups = await readGroups();
+    const next = (await fn(groups)) || groups;
+    await writeGroups(next);
+    return next;
+  });
+  groupsLock = run.catch(() => {});
+  return run;
+}
+
+function normalizeGroup(g) {
+  return {
+    id: g.id,
+    name: typeof g.name === "string" ? g.name : "",
+    instruction: typeof g.instruction === "string" ? g.instruction : "",
+    instructionEnabled: g.instructionEnabled === true,
+  };
+}
+
+export async function loadGroups() {
+  const groups = await readGroups();
+  return groups
+    .map(normalizeGroup)
+    .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
+}
+
+export async function saveGroup(group) {
+  const name = (group?.name || "").trim();
+  if (!name) throw new Error("PromptMate: group name cannot be empty");
+
+  let savedId = group?.id || null;
+  await mutateGroups((groups) => {
+    const duplicate = groups.some(
+      (g) => g.id !== group?.id && g.name.trim().toLowerCase() === name.toLowerCase()
+    );
+    if (duplicate) throw new Error(`PromptMate: a group named "${name}" already exists`);
+
+    const idx = group?.id ? groups.findIndex((g) => g.id === group.id) : -1;
+    if (idx >= 0) {
+      groups[idx] = normalizeGroup({ ...groups[idx], ...group, name });
+    } else {
+      savedId = group?.id || generatePromptId();
+      groups.push(normalizeGroup({ instruction: "", instructionEnabled: false, ...group, id: savedId, name }));
+    }
+    return groups;
+  });
+  return savedId;
+}
+
+export async function deleteGroup(groupId) {
+  if (!groupId) return;
+  await mutateGroups((groups) => groups.filter((g) => g.id !== groupId));
+
+  // Move this group's prompts to Ungrouped. One Drive write per prompt —
+  // acceptable at current library sizes.
+  const cache = await readCache();
+  const affected = Object.values(cache.prompts || {}).filter(
+    (p) => p.group === groupId && !p.deletedAt
+  );
+  for (const p of affected) {
+    try {
+      await savePrompt({ ...p, group: null });
+    } catch (err) {
+      console.warn("PromptMate: failed to ungroup prompt after group delete", p.promptId, err);
+    }
+  }
+}
+
+// ---- New-feature badges (Task 34) ----
+// promptmate_badges holds the feature keys whose "New" badge the user has
+// dismissed (by interacting with the feature). Everything else shows a badge.
+
+export const BADGES_KEY = "promptmate_badges";
+
+export function getDismissedBadges() {
+  return new Promise((resolve, reject) => {
+    chrome.storage.local.get({ [BADGES_KEY]: [] }, (res) => {
+      if (chrome.runtime?.lastError) return reject(chrome.runtime.lastError);
+      const list = Array.isArray(res[BADGES_KEY]) ? res[BADGES_KEY] : [];
+      resolve(new Set(list));
+    });
+  });
+}
+
+export async function dismissBadge(featureKey) {
+  if (!featureKey) return;
+  const dismissed = await getDismissedBadges();
+  if (dismissed.has(featureKey)) return;
+  dismissed.add(featureKey);
+  return new Promise((resolve, reject) => {
+    chrome.storage.local.set({ [BADGES_KEY]: [...dismissed] }, () => {
+      if (chrome.runtime?.lastError) return reject(chrome.runtime.lastError);
+      resolve();
+    });
+  });
+}
+
+// ---- Personal context (Task 36) ----
+// Device-local standing context, prepended to assembled messages when enabled.
+// Deliberately excluded from Drive sync and share/export payloads.
+
+export const CONTEXT_KEY = "promptmate_context";
+export const CONTEXT_ENABLED_KEY = "promptmate_context_enabled";
+
+export function loadContext() {
+  return new Promise((resolve, reject) => {
+    chrome.storage.local.get({ [CONTEXT_KEY]: "" }, (res) => {
+      if (chrome.runtime?.lastError) return reject(chrome.runtime.lastError);
+      resolve(typeof res[CONTEXT_KEY] === "string" ? res[CONTEXT_KEY] : "");
+    });
+  });
+}
+
+export function saveContext(text) {
+  return new Promise((resolve, reject) => {
+    chrome.storage.local.set({ [CONTEXT_KEY]: String(text ?? "") }, () => {
+      if (chrome.runtime?.lastError) return reject(chrome.runtime.lastError);
+      resolve();
+    });
+  });
+}
+
+export function loadContextEnabled() {
+  return new Promise((resolve, reject) => {
+    chrome.storage.local.get({ [CONTEXT_ENABLED_KEY]: true }, (res) => {
+      if (chrome.runtime?.lastError) return reject(chrome.runtime.lastError);
+      resolve(res[CONTEXT_ENABLED_KEY] !== false);
+    });
+  });
+}
+
+export function saveContextEnabled(enabled) {
+  return new Promise((resolve, reject) => {
+    chrome.storage.local.set({ [CONTEXT_ENABLED_KEY]: enabled === true }, () => {
+      if (chrome.runtime?.lastError) return reject(chrome.runtime.lastError);
+      resolve();
+    });
+  });
+}
+
+// Canonical assembly order: context → group instruction → body → tone →
+// format. Pure and sync so it's trivially testable; callers gather the
+// layers from storage. Each optional layer can be suppressed for one insert
+// via toggles.<key> === false (session-only, never persisted).
+export function assembleMessage({
+  context,
+  groupInstruction,
+  body,
+  tone,
+  format,
+  toggles = {},
+} = {}) {
+  const parts = [];
+  if (context?.trim() && toggles.context !== false) parts.push(context.trim());
+  if (groupInstruction?.trim() && toggles.groupInstruction !== false) {
+    parts.push(groupInstruction.trim());
+  }
+  parts.push(body ?? "");
+  if (tone?.instruction && toggles.tone !== false) parts.push(tone.instruction);
+  if (format?.instruction && toggles.format !== false) parts.push(format.instruction);
+  return parts.filter(Boolean).join("\n\n");
+}
+
 // ---- Pin / used helpers (used by stages 2 and 4) ----
 
 export async function setPromptPinned(promptId, pinned) {
@@ -808,6 +1049,7 @@ export async function restorePromptVersion(promptId, revisionId) {
     pinned: entry.pinned,
     used: entry.used,
     createdAt: entry.createdAt,
+    group: entry.group ?? null,
   });
 }
 
@@ -857,7 +1099,7 @@ export function dismissOnboardingGuide() {
 // ---- What's New state ----
 
 export const WHATS_NEW_KEY = "promptmate.whatsNew";
-export const WHATS_NEW_VERSION = "0.7.0";
+export const WHATS_NEW_VERSION = "0.8.0";
 export const RATING_PROMPT_KEY = "promptmate.ratingPrompt";
 const RATING_PROMPT_DELAY_MS = 7 * 24 * 60 * 60 * 1000;
 
