@@ -23,7 +23,7 @@ PromptMate is a Chrome extension that injects a prompt-management sidebar into [
 - **Prompt library** — save, edit, and organize prompts in a sidebar alongside the chat
 - **Tone + Output Format presets** — compose prompts by combining a body with reusable modifiers (formal, concise, bullet list, JSON, etc.)
 - **One-click insert** — sends the composed text straight into the ChatGPT, Claude, DeepSeek, or Kimi input field
-- **Local-first** — prompts are stored in `chrome.storage.local` on your machine (Drive sync coming soon)
+- **Google Drive sync** — prompts sync across devices via your own Google Drive; local storage acts as a cache so the extension works offline
 - **No servers, no tracking** — the extension talks only to the host sites you're already using
 
 ## Install
@@ -51,7 +51,7 @@ Install from the [Chrome Web Store listing](https://chromewebstore.google.com/de
 
 ## Privacy
 
-PromptMate does not run any backend. Your prompts are stored in your browser's local extension storage and (once Drive sync ships) in your own Google Drive. The extension has host permissions only for `chatgpt.com`, `claude.ai`, `chat.deepseek.com`, and `kimi.com` — the four sites it injects the sidebar into.
+PromptMate does not run any backend. Your prompts are stored in your own Google Drive (local storage is used as a cache). No PromptMate server ever sees your data. The extension has host permissions only for `chatgpt.com`, `claude.ai`, `chat.deepseek.com`, and `kimi.com` — the four sites it injects the sidebar into.
 
 ## Contributing
 
