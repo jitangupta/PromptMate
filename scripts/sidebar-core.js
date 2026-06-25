@@ -419,7 +419,7 @@ export function initSidebar({ insertText, adjustLayout = () => {} }) {
     wrap.querySelector("[data-pm-user-guide]").addEventListener("click", () => {
       settingsMenu.classList.remove("open");
       // TODO: replace with live article URL when published
-      window.open("https://jitangupta.com/promptmate-guide", "_blank", "noopener,noreferrer");
+      window.open("https://jitangupta.com/promptmate/getting-started/", "_blank", "noopener,noreferrer");
     });
     document.addEventListener("click", (e) => {
       if (!settingsWrap.contains(e.target)) settingsMenu.classList.remove("open");
@@ -853,7 +853,7 @@ export function initSidebar({ insertText, adjustLayout = () => {} }) {
       listEl.appendChild(empty);
       if (currentView === "active") {
         // TODO: replace with live article URL when published
-        const GUIDE_URL = "https://jitangupta.com/promptmate-guide";
+        const GUIDE_URL = "https://jitangupta.com/promptmate/getting-started/";
         const card = document.createElement("div");
         card.className = "pm-doc-card";
         card.innerHTML = `

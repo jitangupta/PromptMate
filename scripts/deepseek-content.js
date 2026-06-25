@@ -1,3 +1,4 @@
+import "./test-seam.js";
 import { initSidebar } from "./sidebar-core.js";
 
 const DEEPSEEK_INPUT_SELECTORS = [
