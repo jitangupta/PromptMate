@@ -11,7 +11,6 @@
           <h1>PromptMate</h1>
           <p>Your prompts, one click away.</p>
         </div>
-        <span class="beta-badge">Beta</span>
       </header>
 
       <section class="status-panel" aria-labelledby="site-status-title">
@@ -23,48 +22,46 @@
       </section>
 
       <section aria-labelledby="platforms-title">
-        <h2 id="platforms-title">Platforms</h2>
-        <ul class="platform-list">
-          <li>
-            <span>ChatGPT</span>
-            <span class="platform-status">Supported</span>
-          </li>
-          <li>
-            <span>Claude</span>
-            <span class="platform-status">Supported</span>
-          </li>
-          <li>
-            <span>DeepSeek <span class="new-badge">New</span></span>
-            <span class="platform-status">Supported</span>
-          </li>
-          <li>
-            <span>Kimi <span class="new-badge">New</span></span>
-            <span class="platform-status">Supported</span>
-          </li>
+        <div class="section-heading">
+          <h2 id="platforms-title">Platforms</h2>
+          <span>15 supported</span>
+        </div>
+        <ul class="platform-chips">
+          <li>ChatGPT</li>
+          <li>Claude</li>
+          <li>DeepSeek</li>
+          <li>Kimi</li>
+          <li class="new">Gemini</li>
+          <li class="new">Grok</li>
+          <li class="new">Perplexity</li>
+          <li class="new">Microsoft Copilot</li>
+          <li class="new">Le Chat</li>
+          <li class="new">Meta AI</li>
+          <li class="new">Qwen Chat</li>
+          <li class="new">Poe</li>
+          <li class="new">HuggingChat</li>
+          <li class="new">Google AI Studio</li>
+          <li class="new">Pi</li>
         </ul>
       </section>
 
       <section aria-labelledby="whats-new-title">
         <div class="section-heading">
           <h2 id="whats-new-title">What's new</h2>
-          <span>v0.8.0</span>
+          <span>v1.0.0</span>
         </div>
         <ul class="whats-new-list">
           <li>
             <span class="change-tag feature">Feature</span>
-            <span>Variables in Prompts — add <code>{{variable}}</code> placeholders; fill them in before each send.</span>
+            <span>11 new platforms — the sidebar now works on Gemini, Grok, Perplexity, Microsoft Copilot, Le Chat, Meta AI, Qwen Chat, Poe, HuggingChat, Google AI Studio, and Pi.</span>
           </li>
           <li>
-            <span class="change-tag feature">Feature</span>
-            <span>Prompt Groups — organise prompts into named groups for faster browsing.</span>
+            <span class="change-tag ui">UI</span>
+            <span>This popup now recognises all 15 platforms, including Grok on <code>x.com/i/grok</code> and HuggingChat.</span>
           </li>
           <li>
-            <span class="change-tag feature">Feature</span>
-            <span>Group Instructions — attach a shared instruction that prepends to every prompt in a group.</span>
-          </li>
-          <li>
-            <span class="change-tag feature">Feature</span>
-            <span>User Context — set a persistent personal context that is included with every prompt you send.</span>
+            <span class="change-tag fix">Note</span>
+            <span>On <code>x.com</code> and <code>huggingface.co</code> the sidebar loads only on the chat pages — refresh the page there if it doesn't appear.</span>
           </li>
         </ul>
       </section>
