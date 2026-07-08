@@ -11,6 +11,19 @@ Versions correspond to `manifest.json` / `package.json`.
 
 ---
 
+## [1.0.0] — Multi-Host Expansion
+
+### Added
+- **11 new platforms** — the sidebar now injects into Gemini, Grok (`grok.com` and `x.com/i/grok`), Perplexity, Microsoft Copilot, Mistral Le Chat, Meta AI, Qwen Chat, Poe, HuggingChat, Google AI Studio, and Pi, alongside ChatGPT, Claude, DeepSeek, and Kimi (15 total)
+- Shared `insert-adapter.js` factory — one dual-path insertion implementation (textarea + contenteditable) reused by all factory-based host adapters, with a guard so generic selector fallbacks can never insert into PromptMate's own UI
+- Toolbar popup recognises all 15 platforms, path-aware for `x.com/i/grok` and `huggingface.co/chat`
+
+### Changed
+- On `x.com` and `huggingface.co` the content script is path-scoped to the chat pages (`/i/grok`, `/chat`); it only injects on a direct load/refresh of those paths (Chrome still grants host permission per origin)
+- DeepSeek and Kimi adapters refactored onto the shared insert factory (no behaviour change)
+
+---
+
 ## [0.8.0] — Variables, Prompt Groups & User Context
 
 ### Added
