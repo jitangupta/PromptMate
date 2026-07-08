@@ -4,11 +4,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-PromptMate is a **Manifest V3 Chrome extension** that injects a prompt-management sidebar into ChatGPT (`chatgpt.com`) and Claude (`claude.ai`). Prompts are composed from a user-written body plus a selectable **Tone** and **Output Format** (defined in `scripts/business.js`), then inserted into the host site's input field.
+PromptMate is a **Manifest V3 Chrome extension** that injects a prompt-management sidebar into AI chat platforms. Prompts are composed from a user-written body plus a selectable **Tone** and **Output Format** (defined in `scripts/business.js`), then inserted into the host site's input field.
+
+Supported hosts (one content-script bundle each): ChatGPT, Claude, DeepSeek, Kimi, Grok (`grok.com` + `x.com/i/grok`), Gemini, Perplexity, Microsoft Copilot, Mistral Le Chat, Meta AI, Qwen Chat, Poe, HuggingChat (`huggingface.co/chat`), Google AI Studio, Pi. The full list lives in `CONTENT_SCRIPTS` in `rollup.config.js` and the `content_scripts` array in `manifest.json`.
 
 ## Commands
 
-- `npm run build` — Rollup build of the three bundles into `dist/` (gitignored).
+- `npm run build` — Rollup build of all bundles into `dist/` (gitignored).
 - `npm run watch` — Rollup in watch mode.
 - `npm run build:package` — Copies `dist/`, `icons/`, `popup/`, and `manifest.json` into `promptmate-dist/` and zips it for Chrome Web Store upload. Run `build` first (or use `npm run release`).
 - `npm run release` — `build` then `build:package`.
@@ -18,28 +20,34 @@ To load the extension locally: `npm run build`, then in Chrome → `chrome://ext
 
 ## Architecture
 
-### Build outputs (declared in `manifest.json`, produced by `rollup.config.js`)
-Three IIFE bundles — content scripts **cannot be ESM**, so Rollup bundles ES modules into IIFE:
-- `dist/background.bundle.js` ← `background.js` (service worker, currently just a stub)
-- `dist/gpt-content.bundle.js` ← `scripts/gpt-content.js` (injected into `chatgpt.com`)
-- `dist/claude-content.bundle.js` ← `scripts/claude-content.js` (injected into `claude.ai`, plus `styles/claude.css`)
+### Shared core + thin per-host adapters
+
+- `scripts/sidebar-core.js` — owns the entire feature surface: the floating **pill** (`createPill`, appended to `document.body`, idempotent, host-agnostic — there is no header-button injection into host DOM), the sidebar UI (prompt list, create/edit form, Tone/Format selects, groups, variables), DOM-ready waiting, and insert orchestration (`performInsert`, which fires `insert_failed` telemetry). It imports `styles/pm-v2.css` (the single stylesheet, injected into every bundle by `rollup-plugin-postcss` with `inject: true`).
+- `scripts/insert-adapter.js` — `createInsertText({ host, selectors })` factory implementing the shared dual-path insertion: textarea/input path (native value-setter + `InputEvent` + `change` so React/Vue see the change) and contenteditable path (synthetic `paste` ClipboardEvent; `defaultPrevented` means the rich editor consumed it; `execCommand("insertText")` fallback). Includes the `isUsableComposer` visibility/enabled guard and per-host insert-failure logging.
+- `scripts/<host>-content.js` — one thin adapter per host (~20 lines): a fallback-ordered `*_INPUT_SELECTORS` array + `initSidebar({ insertText: createInsertText(...) })`. Exception: `gpt-content.js` and `claude-content.js` predate the factory and keep their own insert implementations (ChatGPT also passes `adjustLayout` to push the page content aside when the sidebar opens).
+- The adapter contract is documented in `initSidebar`'s JSDoc: `insertText: (text) => {success, error?}` (required), `adjustLayout: (isOpen) => void` (optional).
 
 ### Shared modules
-- `scripts/business.js` — **Single source of truth** for: `STORAGE_KEY`, `TONE_OPTIONS`, `FORMAT_OPTIONS` (each option has `{ option, category, instruction }` — `category` drives `<optgroup>` grouping in the select widgets), and storage/analytics helpers (`loadPrompts`, `savePrompts`, `recordAnalytics`, `shareAnalytics`). Persistence is `chrome.storage.local`. Edit options here and both hosts pick them up.
-- `scripts/utility.js` — DOM builders. Note there are **two parallel sets**: `makeInputField`/`makeSelectField` (ChatGPT) and `makeClaudeInputField`/`makeClaudeSelectField` (Claude). They exist separately because each host site uses its own Tailwind design-token classes (`bg-token-*`/`text-token-*` for ChatGPT, `bg-bg-*`/`text-text-*`/`border-border-*` for Claude). When adding a new field, update both.
+- `scripts/business.js` — **single source of truth** for storage keys, `TONE_OPTIONS`, `FORMAT_OPTIONS` (each option `{ option, category, instruction }`), `assembleMessage`, variables, and analytics helpers. Persistence: Google Drive is source of truth, `chrome.storage.local` is a read-through cache + write queue. Fully host-agnostic — never put DOM or host-specific code here.
+- `scripts/utility.js` — small helpers (`copyToClipboard`).
+- `scripts/test-seam.js` — build-gated URL-param hook to seed `chrome.storage.local` for agent QA.
 
-### Host integrations (`gpt-content.js`, `claude-content.js`)
-Each content script:
-1. Waits for the host page's DOM and injects a "PromptMate" header button (selectors are specific to each host's current DOM — e.g., ChatGPT uses `#conversation-header-actions`, Claude uses `header .right-3.flex.gap-2 > div`; these **break when the host site ships a redesign** and are the most likely source of regressions).
-2. Toggles a sidebar with a prompt list, a create/edit form, and the Tone/Format selectors.
-3. On "Use", writes the composed text into the host's input (textarea for ChatGPT, `contenteditable` ProseMirror for Claude) and dispatches the input events the host framework expects.
+### Adding a new host
+
+1. Create `scripts/<host>-content.js` (copy any factory-based adapter, e.g. `deepseek-content.js`): selector list ordered most-specific → generic, then `initSidebar({ insertText: createInsertText({ host, selectors }) })`.
+2. Add the host name to `CONTENT_SCRIPTS` in `rollup.config.js`.
+3. `manifest.json`: add the origin(s) to `host_permissions`, a `content_scripts` entry pointing at `dist/<host>-content.bundle.js`, and the origin to `web_accessible_resources[0].matches` (origin-level `/*` patterns only — the pill's logo icon 404s otherwise).
+4. Verify on the live site: pill appears, insert lands in the composer, and the host's **send button enables** (proves the framework saw the input event).
+
+### Build outputs
+Content scripts **cannot be ESM**, so Rollup bundles ES modules into IIFE — one bundle per host (`dist/<host>-content.bundle.js`) plus `dist/background.bundle.js` (service worker, currently just a stub). Bundle configs are generated by mapping over `CONTENT_SCRIPTS` in `rollup.config.js`.
 
 ### Popup (`popup/`)
 The toolbar popup (`popup.html` + `popup.js`) is a **minimal/beta UI** — it just injects a prompt into the first `<textarea>` on the active tab. The real feature surface is the in-page sidebar, not the popup.
 
 ## Conventions to preserve
 
-- **Keep `business.js` host-agnostic.** Anything DOM- or host-specific belongs in the content script or `utility.js`.
-- **Mirror Tone/Format changes across both hosts.** Since ChatGPT and Claude share `business.js`, option changes propagate automatically — but if you add a new form field, remember to add it to both `gpt-content.js` and `claude-content.js` and add matching `makeX`/`makeClaudeX` helpers in `utility.js`.
-- **Don't add permissions casually.** `manifest.json` currently requests only `storage` + `scripting` and host permissions for the two target sites. The recent commit history (`4797752`, `63b9094`) shows deliberate permission minimization.
-- **Host DOM selectors are fragile.** When either site redesigns, fix selectors rather than broadening them — broad selectors cause injection into the wrong containers.
+- **Keep `business.js` host-agnostic.** Anything DOM- or host-specific belongs in the host adapter or `insert-adapter.js`.
+- **Don't add permissions casually.** `manifest.json` requests only `storage` + `identity` plus host permissions for the sites it injects into. Path-scope `content_scripts` matches where possible (`x.com/i/grok*`, `huggingface.co/chat*`) so injection stays limited to the chat pages — the commit history shows deliberate permission minimization. Two caveats: (1) Chrome **ignores the path in `host_permissions`** (it's treated as `/*`), so the granted permission is always origin-wide — path scoping constrains injection, not the permission; (2) path-scoped matches only inject on a direct load/refresh of that path, not on SPA navigation from elsewhere on the origin.
+- **Host DOM selectors are fragile.** Composer selectors break when a host ships a redesign — they are the most likely source of regressions (there is a `/selector-regression` skill for triaging this). Keep selector lists fallback-ordered: specific (placeholder/aria-label/id) first, generic `textarea`/`[contenteditable="true"]` last. When a site redesigns, fix selectors rather than broadening them.
+- **All sidebar CSS lives in `styles/pm-v2.css`**, scoped under `.pm-sidebar`/`.pm-pill` so it doesn't leak into host pages. Host-specific quirks get scoped overrides there, not new stylesheets.

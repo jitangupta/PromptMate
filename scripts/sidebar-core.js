@@ -478,8 +478,8 @@ export function initSidebar({ insertText, adjustLayout = () => {} }) {
     banner.innerHTML = `
       <div class="pm-whats-new-content">
         <span class="pm-whats-new-badge">New in v${WHATS_NEW_VERSION}</span>
-        <strong class="pm-whats-new-title">Variables, Groups &amp; User Context</strong>
-        <p class="pm-whats-new-desc">Add <strong>{{variables}}</strong> to any prompt and fill them in before sending. Organise prompts into <strong>Groups</strong> with shared instructions. Set a <strong>User Context</strong> that travels with every prompt you send.</p>
+        <strong class="pm-whats-new-title">Now on 15 AI platforms</strong>
+        <p class="pm-whats-new-desc">Your prompt library now travels with you to <strong>Gemini</strong>, <strong>Grok</strong>, <strong>Perplexity</strong>, <strong>Copilot</strong>, <strong>Le Chat</strong>, <strong>Meta AI</strong>, <strong>Qwen</strong>, <strong>Poe</strong>, <strong>HuggingChat</strong>, <strong>AI Studio</strong>, and <strong>Pi</strong> — same sidebar, same prompts, everywhere.</p>
         <a class="pm-rating-link" href="https://jitangupta.com/promptmate/whats-new" target="_blank" rel="noopener noreferrer">See what's new →</a>
       </div>
       <button class="pm-iconbtn pm-whats-new-dismiss" type="button" aria-label="Dismiss">

@@ -1,7 +1,7 @@
 {
   "name": "promptmate",
-  "version": "0.8.0",
-  "description": "Chrome extension that adds a prompt-management sidebar to ChatGPT, Claude, and DeepSeek. Compose prompts from a reusable body plus tone and output-format presets, then insert them into the host with one click.",
+  "version": "1.0.0",
+  "description": "Chrome extension that adds a prompt-management sidebar to 15 AI chat platforms (ChatGPT, Claude, Gemini, Grok, Perplexity, and more). Compose prompts from a reusable body plus tone and output-format presets, then insert them into the host with one click.",
   "main": "background.js",
   "scripts": {
     "build": "rollup -c",
