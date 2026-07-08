@@ -16,13 +16,13 @@
   </a>
 </p>
 
-PromptMate is a Chrome extension that injects a prompt-management sidebar into [ChatGPT](https://chatgpt.com), [Claude](https://claude.ai), [DeepSeek](https://chat.deepseek.com), and [Kimi](https://kimi.com). Compose prompts from a reusable body plus selectable **Tone** and **Output Format** presets, then insert them into the host chat with a single click.
+PromptMate is a Chrome extension that injects a prompt-management sidebar into 15 AI chat platforms: [ChatGPT](https://chatgpt.com), [Claude](https://claude.ai), [Gemini](https://gemini.google.com), [Grok](https://grok.com), [Perplexity](https://www.perplexity.ai), [Microsoft Copilot](https://copilot.microsoft.com), [DeepSeek](https://chat.deepseek.com), [Mistral Le Chat](https://chat.mistral.ai), [Meta AI](https://www.meta.ai), [Qwen Chat](https://chat.qwen.ai), [Kimi](https://kimi.com), [Poe](https://poe.com), [HuggingChat](https://huggingface.co/chat), [Google AI Studio](https://aistudio.google.com), and [Pi](https://pi.ai). Compose prompts from a reusable body plus selectable **Tone** and **Output Format** presets, then insert them into the host chat with a single click.
 
 ## Features
 
 - **Prompt library** — save, edit, and organize prompts in a sidebar alongside the chat
 - **Tone + Output Format presets** — compose prompts by combining a body with reusable modifiers (formal, concise, bullet list, JSON, etc.)
-- **One-click insert** — sends the composed text straight into the ChatGPT, Claude, DeepSeek, or Kimi input field
+- **One-click insert** — sends the composed text straight into the host chat's input field
 - **Google Drive sync** — prompts sync across devices via your own Google Drive; local storage acts as a cache so the extension works offline
 - **No servers, no tracking** — the extension talks only to the host sites you're already using
 
@@ -43,7 +43,7 @@ Then in Chrome:
 2. Enable **Developer mode** (top-right toggle)
 3. Click **Load unpacked** and select the repo root
 
-The extension appears on `chatgpt.com`, `claude.ai`, `chat.deepseek.com`, and `kimi.com` as a **PromptMate** floating button.
+The extension appears on each supported chat site as a **PromptMate** floating button. Note: on `x.com` and `huggingface.co` the extension is path-scoped (`/i/grok`, `/chat`) — load or refresh those pages directly for the button to appear.
 
 ### From Chrome Web Store
 
@@ -51,7 +51,7 @@ Install from the [Chrome Web Store listing](https://chromewebstore.google.com/de
 
 ## Privacy
 
-PromptMate does not run any backend. Your prompts are stored in your own Google Drive (local storage is used as a cache). No PromptMate server ever sees your data. The extension has host permissions only for `chatgpt.com`, `claude.ai`, `chat.deepseek.com`, and `kimi.com` — the four sites it injects the sidebar into.
+PromptMate does not run any backend. Your prompts are stored in your own Google Drive (local storage is used as a cache). No PromptMate server ever sees your data. The extension has host permissions only for the chat sites it injects the sidebar into — and where a site hosts more than the chat (x.com, huggingface.co), the extension only injects on the chat pages (`/i/grok`, `/chat`). Note that Chrome grants host permissions per origin, so the browser will still list access to the whole site even though the extension never runs outside those paths.
 
 ## Contributing
 

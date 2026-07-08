@@ -12,83 +12,47 @@ const buildReplace = () => replace({
   preventAssignment: true,
 });
 
+// One bundle per host adapter: scripts/<host>-content.js → dist/<host>-content.bundle.js
+const CONTENT_SCRIPTS = [
+  'gpt',
+  'claude',
+  'deepseek',
+  'kimi',
+  'grok',
+  'gemini',
+  'perplexity',
+  'copilot',
+  'lechat',
+  'metaai',
+  'qwen',
+  'poe',
+  'huggingchat',
+  'aistudio',
+  'pi',
+];
+
+const contentScriptConfig = (host) => ({
+  input: `scripts/${host}-content.js`,
+  output: {
+    file: `dist/${host}-content.bundle.js`,
+    format: 'iife',
+    sourcemap: true
+  },
+  plugins: [
+    buildReplace(),
+    resolve(),
+    commonjs(),
+    postcss({
+      inject: true,
+      minimize: isProd,
+      extensions: ['.css']
+    }),
+    ...maybeTerser()
+  ]
+});
+
 export default [
-  {
-    input: 'scripts/gpt-content.js',
-    output: {
-      file: 'dist/gpt-content.bundle.js',
-      format: 'iife',
-      sourcemap: true
-    },
-    plugins: [
-      buildReplace(),
-      resolve(),
-      commonjs(),
-      postcss({
-        inject: true,
-        minimize: isProd,
-        extensions: ['.css']
-      }),
-      ...maybeTerser()
-    ]
-  },
-  {
-    input: 'scripts/claude-content.js',
-    output: {
-      file: 'dist/claude-content.bundle.js',
-      format: 'iife',
-      sourcemap: true
-    },
-    plugins: [
-      buildReplace(),
-      resolve(),
-      commonjs(),
-      postcss({
-        inject: true,
-        minimize: isProd,
-        extensions: ['.css']
-      }),
-      ...maybeTerser()
-    ]
-  },
-  {
-    input: 'scripts/deepseek-content.js',
-    output: {
-      file: 'dist/deepseek-content.bundle.js',
-      format: 'iife',
-      sourcemap: true
-    },
-    plugins: [
-      buildReplace(),
-      resolve(),
-      commonjs(),
-      postcss({
-        inject: true,
-        minimize: isProd,
-        extensions: ['.css']
-      }),
-      ...maybeTerser()
-    ]
-  },
-  {
-    input: 'scripts/kimi-content.js',
-    output: {
-      file: 'dist/kimi-content.bundle.js',
-      format: 'iife',
-      sourcemap: true
-    },
-    plugins: [
-      buildReplace(),
-      resolve(),
-      commonjs(),
-      postcss({
-        inject: true,
-        minimize: isProd,
-        extensions: ['.css']
-      }),
-      ...maybeTerser()
-    ]
-  },
+  ...CONTENT_SCRIPTS.map(contentScriptConfig),
   {
     input: 'background.js',
     output: {

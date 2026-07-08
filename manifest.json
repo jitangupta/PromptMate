@@ -19,7 +19,23 @@
     "*://claude.ai/*",
     "*://chat.deepseek.com/*",
     "*://kimi.com/*",
-    "*://www.kimi.com/*"
+    "*://www.kimi.com/*",
+    "*://grok.com/*",
+    "*://www.grok.com/*",
+    "*://x.com/i/grok*",
+    "*://gemini.google.com/*",
+    "*://perplexity.ai/*",
+    "*://www.perplexity.ai/*",
+    "*://copilot.microsoft.com/*",
+    "*://chat.mistral.ai/*",
+    "*://meta.ai/*",
+    "*://www.meta.ai/*",
+    "*://chat.qwen.ai/*",
+    "*://poe.com/*",
+    "*://www.poe.com/*",
+    "*://huggingface.co/chat*",
+    "*://aistudio.google.com/*",
+    "*://pi.ai/*"
   ],
   "action": {
     "default_popup": "popup/popup.html",
@@ -50,12 +66,78 @@
       "matches": ["*://kimi.com/*", "*://www.kimi.com/*"],
       "js": ["dist/kimi-content.bundle.js"],
       "run_at": "document_idle"
+    },
+    {
+      "matches": ["*://grok.com/*", "*://www.grok.com/*", "*://x.com/i/grok*"],
+      "js": ["dist/grok-content.bundle.js"]
+    },
+    {
+      "matches": ["*://gemini.google.com/*"],
+      "js": ["dist/gemini-content.bundle.js"]
+    },
+    {
+      "matches": ["*://perplexity.ai/*", "*://www.perplexity.ai/*"],
+      "js": ["dist/perplexity-content.bundle.js"]
+    },
+    {
+      "matches": ["*://copilot.microsoft.com/*"],
+      "js": ["dist/copilot-content.bundle.js"]
+    },
+    {
+      "matches": ["*://chat.mistral.ai/*"],
+      "js": ["dist/lechat-content.bundle.js"]
+    },
+    {
+      "matches": ["*://meta.ai/*", "*://www.meta.ai/*"],
+      "js": ["dist/metaai-content.bundle.js"]
+    },
+    {
+      "matches": ["*://chat.qwen.ai/*"],
+      "js": ["dist/qwen-content.bundle.js"]
+    },
+    {
+      "matches": ["*://poe.com/*", "*://www.poe.com/*"],
+      "js": ["dist/poe-content.bundle.js"]
+    },
+    {
+      "matches": ["*://huggingface.co/chat*"],
+      "js": ["dist/huggingchat-content.bundle.js"]
+    },
+    {
+      "matches": ["*://aistudio.google.com/*"],
+      "js": ["dist/aistudio-content.bundle.js"]
+    },
+    {
+      "matches": ["*://pi.ai/*"],
+      "js": ["dist/pi-content.bundle.js"]
     }
   ],
   "web_accessible_resources": [
     {
       "resources": ["icons/icon128.png"],
-      "matches": ["*://chatgpt.com/*", "*://claude.ai/*", "*://chat.deepseek.com/*", "*://kimi.com/*", "*://www.kimi.com/*"]
+      "matches": [
+        "*://chatgpt.com/*",
+        "*://claude.ai/*",
+        "*://chat.deepseek.com/*",
+        "*://kimi.com/*",
+        "*://www.kimi.com/*",
+        "*://grok.com/*",
+        "*://www.grok.com/*",
+        "*://x.com/*",
+        "*://gemini.google.com/*",
+        "*://perplexity.ai/*",
+        "*://www.perplexity.ai/*",
+        "*://copilot.microsoft.com/*",
+        "*://chat.mistral.ai/*",
+        "*://meta.ai/*",
+        "*://www.meta.ai/*",
+        "*://chat.qwen.ai/*",
+        "*://poe.com/*",
+        "*://www.poe.com/*",
+        "*://huggingface.co/*",
+        "*://aistudio.google.com/*",
+        "*://pi.ai/*"
+      ]
     }
   ]
 }
