@@ -451,6 +451,31 @@ async function seedOnboarding() {
   );
 }
 
+// ---- Uninstall feedback ----
+// Opened by Chrome in a new tab when the user uninstalls the extension.
+// Only the extension version is passed — no client id, so an uninstall
+// can't be tied back to any analytics identity.
+
+const UNINSTALL_FEEDBACK_URL = "https://jitangupta.com/promptmate/sorry-to-see-you";
+
+function setUninstallFeedbackUrl() {
+  const url = `${UNINSTALL_FEEDBACK_URL}?v=${encodeURIComponent(
+    chrome.runtime.getManifest().version
+  )}`;
+  chrome.runtime.setUninstallURL(url, () => {
+    if (chrome.runtime.lastError) {
+      console.warn(
+        "PromptMate: setUninstallURL failed",
+        chrome.runtime.lastError.message
+      );
+    }
+  });
+}
+
+// Top level so it re-runs on every service-worker start — keeps the version
+// param current after extension updates.
+setUninstallFeedbackUrl();
+
 chrome.runtime.onInstalled.addListener((details) => {
   if (details.reason === "install" || details.reason === "update") {
     sendGaEvent(
